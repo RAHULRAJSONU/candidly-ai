@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Candidly HITL Console</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  .card { border: 1px solid #8884; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  .card h2 { margin: 0 0 0.25rem; font-size: 1.05rem; }
+  .meta { color: #888; font-size: 0.85rem; margin-bottom: 0.75rem; }
+  .content { white-space: pre-wrap; background: #80808014; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.5rem; }
+  .rejected { color: #b45309; font-size: 0.85rem; margin-bottom: 0.5rem; }
+  .rejected li { margin-bottom: 0.25rem; }
+  .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+  .badge.grounded { background: #16a34a33; color: #16a34a; }
+  .badge.review { background: #dc262633; color: #dc2626; }
+  .badge.approved { background: #16a34a33; color: #16a34a; }
+  .badge.rejected { background: #dc262633; color: #dc2626; }
+  textarea { width: 100%; box-sizing: border-box; margin-bottom: 0.5rem; font-family: inherit; }
+  button { padding: 0.4rem 0.9rem; margin-right: 0.5rem; cursor: pointer; }
+  .empty { color: #888; font-style: italic; }
+  .scorecard { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
+  .score { font-size: 0.8rem; background: #80808014; border-radius: 6px; padding: 0.2rem 0.5rem; }
+  .score b { font-variant-numeric: tabular-nums; }
+  .reasons { font-size: 0.85rem; margin: 0 0 0.5rem; padding-left: 1.2rem; }
+  .reasons li { margin-bottom: 0.15rem; }
+  .review-note { font-size: 0.85rem; font-style: italic; color: #666; margin-bottom: 0.5rem; }
+  .tabs { margin-bottom: 1rem; }
+  .tabs button { background: none; border: 1px solid #8884; border-radius: 6px; }
+  .tabs button.active { font-weight: 700; border-color: #4884; }
+</style>
+</head>
+<body>
+<h1>Human-in-the-loop review queue</h1>
+<p class="meta">Tailored resume artifacts pending approval before being handed to the candidate for their own submission. No submission happens from here or anywhere in this app - see docs/04 FR-5.</p>
+<div class="tabs">
+  <button id="tab-pending" class="active">Pending</button>
+  <button id="tab-history">Recently decided</button>
+  <button id="refresh">Refresh</button>
+</div>
+<div id="list"></div>
+
+<script>
+let activeTab = 'pending';
+
+async function load() {
+  const list = document.getElementById('list');
+  list.innerHTML = 'Loading…';
+  const url = activeTab === 'pending' ? '/api/tailoring/artifacts/pending-review' : '/api/tailoring/artifacts/history';
+  const res = await fetch(url);
+  const views = await res.json();
+  if (views.length === 0) {
+    list.innerHTML = '<p class="empty">' + (activeTab === 'pending' ? 'Nothing pending review.' : 'No decisions yet.') + '</p>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const v of views) {
+    list.appendChild(activeTab === 'pending' ? renderPendingCard(v) : renderHistoryCard(v));
+  }
+}
+
+function renderScorecard(scorecard) {
+  if (!scorecard) {
+    return '<p class="meta">(match scorecard no longer on file)</p>';
+  }
+  const s = scorecard;
+  const scores = `
+    <div class="scorecard">
+      <span class="score">skill <b>${s.skillScore.toFixed(2)}</b></span>
+      <span class="score">experience <b>${s.experienceScore.toFixed(2)}</b></span>
+      <span class="score">semantic <b>${s.semanticScore.toFixed(2)}</b></span>
+      <span class="score">domain <b>${s.domainScore.toFixed(2)}</b></span>
+      <span class="score">composite <b>${s.compositeScore.toFixed(2)}</b></span>
+    </div>`;
+  const reasons = (s.reasonCodes || []).length
+    ? '<ul class="reasons">' + s.reasonCodes.map(r => `<li>${escapeHtml(r)}</li>`).join('') + '</ul>'
+    : '';
+  return scores + reasons;
+}
+
+function renderPendingCard(v) {
+  const a = v.artifact;
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const badge = a.groundingPassed
+    ? '<span class="badge grounded">grounding passed</span>'
+    : '<span class="badge review">needs human review</span>';
+
+  const rejected = (a.rejectedClaims || []).length
+    ? '<ul class="rejected">' + a.rejectedClaims.map(c => `<li>${escapeHtml(c)}</li>`).join('') + '</ul>'
+    : '';
+
+  card.innerHTML = `
+    <h2>${escapeHtml(a.candidate.fullName)} → ${escapeHtml(a.jobPosting.title)} at ${escapeHtml(a.jobPosting.company)}</h2>
+    <div class="meta">${badge} · ${a.criticLoopsUsed} critic loop(s) · generated ${new Date(a.generatedAt).toLocaleString()}</div>
+    ${renderScorecard(v.matchScorecard)}
+    <div class="content">${escapeHtml(a.content) || '(no bullets survived grounding)'}</div>
+    ${rejected}
+    <textarea rows="2" placeholder="Optional review note"></textarea>
+    <div>
+      <button class="approve">Approve</button>
+      <button class="reject">Reject</button>
+    </div>
+  `;
+
+  card.querySelector('.approve').addEventListener('click', () => decide(a.id, 'approve', card));
+  card.querySelector('.reject').addEventListener('click', () => decide(a.id, 'reject', card));
+  return card;
+}
+
+function renderHistoryCard(v) {
+  const a = v.artifact;
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const decisionBadge = a.status === 'APPROVED'
+    ? '<span class="badge approved">approved</span>'
+    : '<span class="badge rejected">rejected</span>';
+
+  const note = a.reviewNote
+    ? `<p class="review-note">Reviewer note: ${escapeHtml(a.reviewNote)}</p>`
+    : '';
+
+  card.innerHTML = `
+    <h2>${escapeHtml(a.candidate.fullName)} → ${escapeHtml(a.jobPosting.title)} at ${escapeHtml(a.jobPosting.company)}</h2>
+    <div class="meta">${decisionBadge} · reviewed ${a.reviewedAt ? new Date(a.reviewedAt).toLocaleString() : '?'}</div>
+    ${renderScorecard(v.matchScorecard)}
+    ${note}
+    <div class="content">${escapeHtml(a.content) || '(no bullets survived grounding)'}</div>
+  `;
+  return card;
+}
+
+async function decide(id, action, card) {
+  const note = card.querySelector('textarea').value;
+  await fetch(`/api/tailoring/artifacts/${id}/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note })
+  });
+  card.remove();
+}
+
+function escapeHtml(s) {
+  return (s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function setTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-pending').classList.toggle('active', tab === 'pending');
+  document.getElementById('tab-history').classList.toggle('active', tab === 'history');
+  load();
+}
+
+document.getElementById('tab-pending').addEventListener('click', () => setTab('pending'));
+document.getElementById('tab-history').addEventListener('click', () => setTab('history'));
+document.getElementById('refresh').addEventListener('click', load);
+load();
+</script>
+</body>
+</html>

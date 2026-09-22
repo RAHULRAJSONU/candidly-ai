@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-sidebar: #0b1324;
+  --color-sidebar-hover: #131c34;
+  --color-sidebar-active: #14342f;
+  --color-brand-from: #2563eb;
+  --color-brand-to: #14b8a6;
+
+  /* Named score/status colors, matching docs/ui_ux_mock's consistent green/blue/amber/red
+     system across ScoreRing, Badge, and StatCard - previously these were scattered raw
+     Tailwind classes with no single source of truth. */
+  --color-score-excellent: #059669;
+  --color-score-strong: #2563eb;
+  --color-score-good: #d97706;
+  --color-score-weak: #dc2626;
+
+  /* Sidebar bottom panel gradient - a CSS stand-in for the mock's mountain-photo panel
+     (no photo asset/image pipeline exists in this repo), evoking the same navy-to-sunset
+     ridge palette the mock's photos share across screens. */
+  --color-panel-from: #0b1324;
+  --color-panel-via: #1e2a52;
+  --color-panel-to: #7c4a2d;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+@keyframes step-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-step-fade-in {
+  animation: step-fade-in 0.25s ease-out;
+}

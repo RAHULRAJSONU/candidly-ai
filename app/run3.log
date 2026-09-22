@@ -1,0 +1,65 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by org.fusesource.jansi.internal.JansiLoader in an unnamed module (file:/C:/Program%20Files/maven/3.8.6/lib/jansi-2.4.0.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper (file:/C:/Program%20Files/maven/3.8.6/lib/guava-25.1-android.jar)
+WARNING: Please consider reporting this to the maintainers of class com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.1)
+
+2026-09-22T13:16:29.136+05:30  INFO 4564 --- [candidly ai] [           main] a.c.career.CareerPlatformApplication     : Starting CareerPlatformApplication using Java 25 with PID 4564 (C:\ws\candidly-ai\app\target\classes started by RAJRA in C:\ws\candidly-ai\app)
+2026-09-22T13:16:29.139+05:30  INFO 4564 --- [candidly ai] [           main] a.c.career.CareerPlatformApplication     : No active profile set, falling back to 1 default profile: "default"
+2026-09-22T13:16:30.244+05:30  INFO 4564 --- [candidly ai] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-09-22T13:16:30.351+05:30  INFO 4564 --- [candidly ai] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 97 ms. Found 16 JPA repository interfaces.
+2026-09-22T13:16:31.018+05:30  INFO 4564 --- [candidly ai] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-09-22T13:16:31.031+05:30  INFO 4564 --- [candidly ai] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-22T13:16:31.032+05:30  INFO 4564 --- [candidly ai] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-09-22T13:16:31.088+05:30  INFO 4564 --- [candidly ai] [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 1893 ms
+2026-09-22T13:16:31.354+05:30  INFO 4564 --- [candidly ai] [           main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-09-22T13:16:31.405+05:30  INFO 4564 --- [candidly ai] [           main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.5.Final
+2026-09-22T13:16:31.839+05:30  INFO 4564 --- [candidly ai] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-09-22T13:16:31.872+05:30  INFO 4564 --- [candidly ai] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-09-22T13:16:32.054+05:30  INFO 4564 --- [candidly ai] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@5018b56b
+2026-09-22T13:16:32.056+05:30  INFO 4564 --- [candidly ai] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-09-22T13:16:32.145+05:30  INFO 4564 --- [candidly ai] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://localhost:5432/candidly]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 18.6
+	Default catalog/schema: candidly/public
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-09-22T13:16:33.596+05:30  INFO 4564 --- [candidly ai] [           main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-09-22T13:16:33.739+05:30  WARN 4564 --- [candidly ai] [           main] org.hibernate.orm.jdbc.warn              : HHH000247: ErrorCode: 0, SQLState: 00000
+2026-09-22T13:16:33.739+05:30  WARN 4564 --- [candidly ai] [           main] org.hibernate.orm.jdbc.warn              : constraint "ukpahpn4tmpipqmq9e0hi3oharl" of relation "autopilot_include_keyword" does not exist, skipping
+2026-09-22T13:16:33.744+05:30  WARN 4564 --- [candidly ai] [           main] org.hibernate.orm.jdbc.warn              : HHH000247: ErrorCode: 0, SQLState: 00000
+2026-09-22T13:16:33.746+05:30  WARN 4564 --- [candidly ai] [           main] org.hibernate.orm.jdbc.warn              : constraint "uknt881ijcn71g79p6dudty3p39" of relation "job_posting_preferred_skill" does not exist, skipping
+2026-09-22T13:16:33.801+05:30  INFO 4564 --- [candidly ai] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-09-22T13:16:34.065+05:30  INFO 4564 --- [candidly ai] [           main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-09-22T13:16:35.188+05:30  INFO 4564 --- [candidly ai] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-09-22T13:16:35.262+05:30  INFO 4564 --- [candidly ai] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-09-22T13:16:35.275+05:30  INFO 4564 --- [candidly ai] [           main] a.c.career.CareerPlatformApplication     : Started CareerPlatformApplication in 6.698 seconds (process running for 7.186)
+2026-09-22T13:16:37.868+05:30  INFO 4564 --- [candidly ai] [nio-8080-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-22T13:16:37.868+05:30  INFO 4564 --- [candidly ai] [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-09-22T13:16:37.870+05:30  INFO 4564 --- [candidly ai] [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:4.1.1:run (default-cli) on project career-platform: Process terminated with exit code: 1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

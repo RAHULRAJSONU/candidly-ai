@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: candidly ai
+  datasource:
+    url: jdbc:postgresql://localhost:5432/candidly
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: postgres
+    hikari:
+      # docs/01 §4.2: HNSW recall is dominated by ef_search at query time, which the
+      # extension's build defaults don't set. Applied per physical connection so it's
+      # always in effect, independent of which repository/JdbcTemplate path runs a query.
+      connection-init-sql: SET hnsw.ef_search = 100
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+candidly:
+  groq:
+    base-url: https://api.groq.com/openai/v1
+    api-key: ${GROQ_API_KEY:}
+    # llama-3.3-70b-versatile was retired from Groq's catalog; openai/gpt-oss-120b is the
+    # current largest general-purpose chat model there (checked live via GET /v1/models).
+    model: openai/gpt-oss-120b
+  jina:
+    base-url: https://api.jina.ai/v1
+    api-key: ${JINA_API_KEY:}
+    model: jina-embeddings-v3
+  typesafe:
+    base-url: https://api.typesafe.ai/v1
+    api-key: ${TYPESAFE_API_KEY:}
+    model: jev-latest
+  thresholds:
+    shortlist-score: 0.72
+    mandatory-skill-minimum: 0.60
+  screening:
+    review-threshold: 0.40
+    block-threshold: 0.75
+  tailoring:
+    max-critic-loops: 3
+  discovery:
+    greenhouse:
+      # False by default so a fresh checkout doesn't start hitting a live external
+      # service on an hourly schedule without an explicit opt-in. GitLab's public board
+      # is a real, stable example board with no auth required - see
+      # https://boards-api.greenhouse.io/v1/boards/gitlab/jobs
+      enabled: false
+      board-tokens:
+        - gitlab
+      # Each discovered posting costs a screening + embedding call downstream; a real
+      # board can list hundreds. Kept small for a demo/dev poll, not a real ingestion run.
+      max-postings-per-board: 5
+    lever:
+      # Same off-by-default rationale as greenhouse.enabled above. Palantir's public
+      # careers site is a real, stable, high-volume example with no auth required - see
+      # https://api.lever.co/v0/postings/palantir?mode=json (lever.co's own "lever" slug
+      # has zero live postings as of this writing, so it's a poor example board).
+      enabled: false
+      company-slugs:
+        - palantir
+      max-postings-per-board: 5

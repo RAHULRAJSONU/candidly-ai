@@ -1,0 +1,13 @@
+package ai.candidly.career;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class CareerPlatformApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(CareerPlatformApplication.class, args);
+	}
+
+}
