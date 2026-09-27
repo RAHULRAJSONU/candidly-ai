@@ -35,6 +35,10 @@ public class EmailReviewService {
         return recordRepository.findByCandidateIdOrderByClassifiedAtDesc(candidateId);
     }
 
+    public List<EmailIntakeRecord> thread(UUID candidateId, UUID jobPostingId) {
+        return recordRepository.findByCandidateIdAndJobPostingIdOrderByClassifiedAtDesc(candidateId, jobPostingId);
+    }
+
     @Transactional
     public EmailIntakeRecord approveSend(UUID recordId, String note) {
         EmailIntakeRecord record = get(recordId);
@@ -54,6 +58,13 @@ public class EmailReviewService {
         EmailIntakeRecord record = get(recordId);
         record.schedule(note);
         return afterDecision(record, "SCHEDULED", note);
+    }
+
+    @Transactional
+    public EmailIntakeRecord suggestAlternative(UUID recordId, String alternativeText, String note) {
+        EmailIntakeRecord record = get(recordId);
+        record.suggestAlternative(alternativeText, note);
+        return afterDecision(record, "ALTERNATIVE_SUGGESTED", note);
     }
 
     @Transactional

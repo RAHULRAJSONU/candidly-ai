@@ -70,7 +70,7 @@ class FuzzyDuplicateJobPostingServiceTest {
     }
 
     private static JobPostingRequest request(String company, String title) {
-        return new JobPostingRequest("src-1", company, title, "Remote", true, null, null, Set.of(), Set.of(),
+        return new JobPostingRequest("src-1", company, title, "Remote", true, null, null, null, Set.of(), Set.of(),
                 Set.of(), "fintech", 5, "raw description");
     }
 

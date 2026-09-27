@@ -5,6 +5,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import ai.candidly.career.domain.Candidate;
@@ -35,21 +36,29 @@ import ai.candidly.career.domain.JobPosting;
 @Service
 public class CompositeScoringService {
 
-    private static final double W_SKILL = 0.47;
-    private static final double W_EXPERIENCE = 0.29;
-    private static final double W_SEMANTIC = 0.12;
-    private static final double W_DOMAIN = 0.12;
-
     private static final double REQUIRED_SKILL_WEIGHT = 0.70;
     private static final double PREFERRED_SKILL_WEIGHT = 0.30;
+
+    private final double weightSkill;
+    private final double weightExperience;
+    private final double weightSemantic;
+    private final double weightDomain;
 
     private final SemanticFitJudgeService semanticFitJudgeService;
     private final DomainFitJudgeService domainFitJudgeService;
 
     public CompositeScoringService(SemanticFitJudgeService semanticFitJudgeService,
-            DomainFitJudgeService domainFitJudgeService) {
+            DomainFitJudgeService domainFitJudgeService,
+            @Value("${candidly.matching.weights.skill:0.47}") double weightSkill,
+            @Value("${candidly.matching.weights.experience:0.29}") double weightExperience,
+            @Value("${candidly.matching.weights.semantic:0.12}") double weightSemantic,
+            @Value("${candidly.matching.weights.domain:0.12}") double weightDomain) {
         this.semanticFitJudgeService = semanticFitJudgeService;
         this.domainFitJudgeService = domainFitJudgeService;
+        this.weightSkill = weightSkill;
+        this.weightExperience = weightExperience;
+        this.weightSemantic = weightSemantic;
+        this.weightDomain = weightDomain;
     }
 
     public ScoreBreakdown score(Candidate candidate, List<CandidateExperience> experiences, JobPosting job) {
@@ -58,8 +67,28 @@ public class CompositeScoringService {
         double semanticScore = semanticFitJudgeService.judge(experiences, job);
         double domainScore = experiences.isEmpty() ? 0.0 : domainFitJudgeService.judge(experiences, job);
 
-        double composite = W_SKILL * skillScore + W_EXPERIENCE * experienceScore
-                + W_SEMANTIC * semanticScore + W_DOMAIN * domainScore;
+        // jaccard() returns 1.0 (a "perfect match") whenever a posting states no mandatory/
+        // preferred skills at all - correct for the eligibility gate (a candidate can't be
+        // rejected for skills nobody asked for) but wrong here: a posting with no extracted
+        // skill requirement isn't a perfect skill match, it's simply not comparable on this
+        // dimension. Live-caught during an end-to-end validation pass, where this vacuous 1.0
+        // let non-technical postings with zero extracted skills (e.g. "Associate Renewals
+        // Manager") outrank real engineering matches for a technical candidate. Redistribute
+        // weightSkill across the other three dimensions for this one call instead of letting
+        // it inflate the composite - the same "not comparable, don't fail or inflate" treatment
+        // EligibilityGateService already applies to cross-currency comp comparisons.
+        boolean skillDataAvailable = !job.getMandatorySkillIds().isEmpty() || !job.getPreferredSkillIds().isEmpty();
+        double composite;
+        if (skillDataAvailable) {
+            composite = weightSkill * skillScore + weightExperience * experienceScore
+                    + weightSemantic * semanticScore + weightDomain * domainScore;
+        } else {
+            double remaining = weightExperience + weightSemantic + weightDomain;
+            double factor = remaining == 0 ? 0 : weightSkill / remaining;
+            composite = (weightExperience + weightExperience * factor) * experienceScore
+                    + (weightSemantic + weightSemantic * factor) * semanticScore
+                    + (weightDomain + weightDomain * factor) * domainScore;
+        }
 
         return new ScoreBreakdown(skillScore, experienceScore, semanticScore, domainScore, composite);
     }

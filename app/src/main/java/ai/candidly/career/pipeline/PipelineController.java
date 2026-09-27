@@ -18,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import ai.candidly.career.domain.Candidate;
 import ai.candidly.career.domain.CandidateRepository;
+import ai.candidly.career.domain.CurrencyCodes;
 import ai.candidly.career.domain.JobPosting;
 import ai.candidly.career.domain.JobPostingRepository;
 import jakarta.validation.Valid;
@@ -63,7 +64,7 @@ public class PipelineController {
             @PathVariable UUID applicationId, @RequestBody Map<String, String> body) {
         ManualApplication application = manualApplicationRepository.findById(applicationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatusCode.valueOf(404), "Application not found"));
-        application.updateStatus(ManualApplicationStatus.valueOf(body.get("status")), body.get("note"));
+        application.updateStatus(parseStatus(ManualApplicationStatus.class, body.get("status")), body.get("note"));
         return manualApplicationRepository.save(application);
     }
 
@@ -100,7 +101,7 @@ public class PipelineController {
             @RequestBody Map<String, String> body) {
         Interview interview = interviewRepository.findById(interviewId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatusCode.valueOf(404), "Interview not found"));
-        interview.updateStatus(InterviewStatus.valueOf(body.get("status")));
+        interview.updateStatus(parseStatus(InterviewStatus.class, body.get("status")));
         return interviewRepository.save(interview);
     }
 
@@ -114,7 +115,9 @@ public class PipelineController {
     public Offer recordOffer(@PathVariable UUID candidateId, @Valid @RequestBody OfferRequest request) {
         Candidate candidate = requireCandidate(candidateId);
         JobPosting job = requireJob(request.jobPostingId());
-        return offerRepository.save(new Offer(candidate, job, request.compensationMinorUnits(), request.notes()));
+        String currency = request.currency() == null ? candidate.getPreferredCurrency()
+                : CurrencyCodes.normalize(request.currency(), "currency");
+        return offerRepository.save(new Offer(candidate, job, request.compensationMinorUnits(), currency, request.notes()));
     }
 
     @PutMapping("/offers/{offerId}/status")
@@ -122,7 +125,7 @@ public class PipelineController {
             @RequestBody Map<String, String> body) {
         Offer offer = offerRepository.findById(offerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatusCode.valueOf(404), "Offer not found"));
-        offer.updateStatus(OfferStatus.valueOf(body.get("status")));
+        offer.updateStatus(parseStatus(OfferStatus.class, body.get("status")));
         return offerRepository.save(offer);
     }
 
@@ -134,5 +137,17 @@ public class PipelineController {
     private JobPosting requireJob(UUID jobPostingId) {
         return jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatusCode.valueOf(404), "Job posting not found"));
+    }
+
+    private <E extends Enum<E>> E parseStatus(Class<E> enumType, String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("status is required");
+        }
+        try {
+            return Enum.valueOf(enumType, value);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("status must be one of " + java.util.Arrays.toString(enumType.getEnumConstants())
+                    + ", got: " + value);
+        }
     }
 }

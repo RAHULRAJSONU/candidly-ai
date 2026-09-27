@@ -30,9 +30,9 @@ class SemanticFitJudgeServiceTest {
 
     @Test
     void normalizesTopLevelScoreToOne() {
-        Candidate candidate = new Candidate("Ada", "ada@example.com", "Remote", Set.of("US"), 0, Set.of());
+        Candidate candidate = new Candidate("Ada", "ada@example.com", "Remote", Set.of("US"), 0, Set.of(), Set.of());
         CandidateExperience experience = new CandidateExperience(candidate, "Acme", "Staff Engineer",
-                LocalDate.of(2018, 1, 1), null, "Led a team building high-scale backend platforms.", Set.of(), Set.of());
+                LocalDate.of(2018, 1, 1), null, "Led a team building high-scale backend platforms.", Set.of(), Set.of(), Set.of());
         JobPosting job = new JobPosting("src-1", "Acme", "Staff Engineer", "Remote", true,
                 null, null, Set.of("US"), Set.of(), Set.of(), "fintech", 5, "raw description");
 

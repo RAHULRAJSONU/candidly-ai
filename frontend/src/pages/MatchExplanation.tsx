@@ -9,7 +9,7 @@ import { ScoreRing } from '../components/ui/ScoreRing'
 import { ProgressBar } from '../components/ui/StatCard'
 import { Button } from '../components/ui/Button'
 import { CompanyAvatar } from '../components/ui/CompanyAvatar'
-import { formatCompRange } from '../lib/format'
+import { formatCompRange } from '../lib/currency'
 
 const SCORE_ROWS: { key: keyof MatchScorecard; label: string; tone: 'blue' | 'violet' | 'green' | 'amber' }[] = [
   { key: 'skillScore', label: 'Skills Match', tone: 'blue' },
@@ -93,7 +93,7 @@ export function MatchExplanation() {
             <p className="text-sm text-slate-500">{match.jobPosting.company}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge tone="slate">{match.jobPosting.remote ? 'Remote' : match.jobPosting.location}</Badge>
-              <Badge tone="slate">{formatCompRange(match.jobPosting.compMinMinorUnits, match.jobPosting.compMaxMinorUnits)}</Badge>
+              <Badge tone="slate">{formatCompRange(match.jobPosting.compMinMinorUnits, match.jobPosting.compMaxMinorUnits, match.jobPosting.currency)}</Badge>
               {match.shortlisted && <Badge tone="green">Shortlisted</Badge>}
             </div>
           </div>

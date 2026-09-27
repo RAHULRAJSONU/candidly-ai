@@ -14,6 +14,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import ai.candidly.career.domain.Candidate;
+import ai.candidly.career.domain.CurrencyCodes;
 import ai.candidly.career.domain.JobPosting;
 
 @Entity
@@ -34,6 +35,12 @@ public class Offer {
 
     private Long compensationMinorUnits;
 
+    /** ISO 4217 code for {@link #compensationMinorUnits}, captured when the offer is recorded
+     * (defaulting to the candidate's preferred currency then) - an offer is a fact, so a later
+     * change to the candidate's currency preference must not relabel it. Nullable for
+     * ddl-auto=update on an existing table; null reads as {@link CurrencyCodes#DEFAULT}. */
+    private String currency;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OfferStatus status;
@@ -48,10 +55,11 @@ public class Offer {
         // JPA
     }
 
-    public Offer(Candidate candidate, JobPosting jobPosting, Long compensationMinorUnits, String notes) {
+    public Offer(Candidate candidate, JobPosting jobPosting, Long compensationMinorUnits, String currency, String notes) {
         this.candidate = candidate;
         this.jobPosting = jobPosting;
         this.compensationMinorUnits = compensationMinorUnits;
+        this.currency = currency;
         this.status = OfferStatus.EXTENDED;
         this.notes = notes;
         this.receivedAt = Instant.now();
@@ -75,6 +83,10 @@ public class Offer {
 
     public Long getCompensationMinorUnits() {
         return compensationMinorUnits;
+    }
+
+    public String getCurrency() {
+        return currency == null ? CurrencyCodes.DEFAULT : currency;
     }
 
     public OfferStatus getStatus() {

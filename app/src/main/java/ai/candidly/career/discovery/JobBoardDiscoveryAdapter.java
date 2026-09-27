@@ -20,5 +20,16 @@ public interface JobBoardDiscoveryAdapter {
      */
     boolean isEnabled();
 
-    List<DiscoveredJobPosting> poll();
+    /** Polls this adapter's configured board list only. */
+    default List<DiscoveredJobPosting> poll() {
+        return poll(List.of());
+    }
+
+    /**
+     * Polls the union of this adapter's configured board/company list and
+     * {@code additionalTargets} (candidate-tracked companies from
+     * {@code AutopilotSettings.trackedCompanySlugs}, resolved by {@code DiscoveryScheduler}
+     * before calling this - each adapter recognizes only its own namespace prefix).
+     */
+    List<DiscoveredJobPosting> poll(List<String> additionalTargets);
 }

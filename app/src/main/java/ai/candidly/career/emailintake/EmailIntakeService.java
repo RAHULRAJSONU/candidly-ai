@@ -42,9 +42,18 @@ import ai.candidly.career.typesafe.TypeSafeResponse;
  * {@link HeuristicDateTimeExtractor} handles it as plain code, per the typesafe-ai
  * skill's "select instead of generate" and "keep exact lookups in code" guidance, and
  * the result is always presented as an editable suggestion, never auto-confirmed.
+ *
+ * <p>The same batched request also asks one Noul, "does this email match a typical
+ * job-scam pattern?" ({@link #SCAM_RISK_THRESHOLD}), since the email is already
+ * untrusted third-party text going through this pipeline - adding the question costs no
+ * extra request. A flagged email still gets classified and (if applicable) still creates
+ * an {@link Interview}; the flag only drives a warning shown to the candidate, it never
+ * blocks anything, since a false positive here should never hide a real interview.
  */
 @Service
 public class EmailIntakeService {
+
+    private static final double SCAM_RISK_THRESHOLD = 0.6;
 
     private final MatchScorecardRepository matchScorecardRepository;
     private final InterviewRepository interviewRepository;
@@ -86,6 +95,12 @@ public class EmailIntakeService {
                         "ONSITE", "In-person at an office",
                         "PHONE", "A phone call",
                         "UNKNOWN", "Not stated, or the email isn't about an interview")));
+        questions.put("scam_risk", TypeSafeQuestion.noul(
+                "Does `email_body` match a typical job-scam / advance-fee / phishing pattern - e.g. it asks "
+                        + "for payment, banking or ID details upfront, is an unsolicited too-good-to-be-true "
+                        + "offer, pressures urgency, or pushes to off-platform contact before any real process?",
+                "This email matches a typical job-scam or phishing pattern",
+                "This email does not show job-scam or phishing signs"));
 
         Map<String, String> applicationOptions = new LinkedHashMap<>();
         for (MatchScorecard scorecard : knownApplications) {
@@ -103,6 +118,8 @@ public class EmailIntakeService {
 
         EmailType emailType = EmailType.valueOf(response.answers().get("email_type").choice());
         InterviewMode mode = InterviewMode.valueOf(response.answers().get("mode").choice());
+        double scamRiskProbability = response.answers().get("scam_risk").noul();
+        boolean scamRisk = scamRiskProbability >= SCAM_RISK_THRESHOLD;
         String relatedKey = questions.containsKey("related_application")
                 ? response.answers().get("related_application").choice()
                 : "NONE";
@@ -135,9 +152,13 @@ public class EmailIntakeService {
                 mode, suggestedTime.orElse(null), createdInterviewId, draftReply, reviewStatus));
         auditLedgerService.record(AuditEventType.EMAIL_CLASSIFIED, candidate.getId(),
                 "record=%s type=%s relatedJob=%s".formatted(record.getId(), emailType, relatedJobPostingId));
+        if (scamRisk) {
+            auditLedgerService.record(AuditEventType.EMAIL_SCAM_RISK_FLAGGED, candidate.getId(),
+                    "record=%s scamRiskProbability=%.2f".formatted(record.getId(), scamRiskProbability));
+        }
 
         return new EmailIntakeResult(emailType, relatedJobPostingId, mode, suggestedTime.orElse(null), createdInterviewId,
-                record.getId(), draftReply);
+                record.getId(), draftReply, scamRisk, scamRiskProbability);
     }
 
     public record EmailIntakeResult(
@@ -147,6 +168,8 @@ public class EmailIntakeService {
             Instant suggestedScheduledAt,
             UUID createdInterviewId,
             UUID recordId,
-            String draftReplyText) {
+            String draftReplyText,
+            boolean scamRisk,
+            double scamRiskProbability) {
     }
 }

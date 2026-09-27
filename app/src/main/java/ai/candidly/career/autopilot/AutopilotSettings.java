@@ -19,12 +19,10 @@ import jakarta.persistence.Table;
 
 /**
  * One candidate's "AI Job Application Agent" configuration + live run state (the mock's
- * Autopilot settings screen). This is a deliberate, explicit deviation from docs/00/
- * docs/02's HITL-by-default guarantee - see the class-level note on {@link
- * AutopilotService} for the scoping decision (no real outbound submission to a live
- * third-party ATS; "apply" here writes through the same {@code TailoredArtifact}
- * approval path the HITL console already uses, just without a human clicking it when
- * {@link #autoApply} is on and the match isn't flagged high-priority).
+ * Autopilot settings screen). See the class-level note on {@link AutopilotService} for the
+ * scoping decision: {@link #autoApply} controls whether the agent auto-generates and queues
+ * tailored applications for review, never whether anything gets submitted without a human
+ * approving it on the Applications page.
  */
 @Entity
 @Table(name = "autopilot_settings")
@@ -96,6 +94,18 @@ public class AutopilotSettings {
     @Column(name = "source")
     private Set<String> enabledJobSources = new HashSet<>(Set.of("GREENHOUSE", "LEVER"));
 
+    /** Companies this candidate wants discovery to actively track, namespaced by adapter
+     * (e.g. {@code "greenhouse:notion"}, {@code "lever:ramp"}) so {@code DiscoveryScheduler}
+     * knows which adapter each entry belongs to. Merged into that adapter's own
+     * {@code application.yml} board list at poll time - public Greenhouse/Lever APIs are
+     * board-token/company-slug lookups, not keyword search, so this (a candidate naming
+     * companies they care about) is the honest lever for candidate-driven discovery, not
+     * an AI "find companies" step this slice doesn't build. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "autopilot_tracked_company", joinColumns = @JoinColumn(name = "autopilot_settings_id"))
+    @Column(name = "company_slug")
+    private Set<String> trackedCompanySlugs = new HashSet<>();
+
     // --- Application settings ---
 
     private boolean autoApply = true;
@@ -106,9 +116,6 @@ public class AutopilotSettings {
     private boolean notifyBeforeApplying = false;
     private boolean autoFollowUp = true;
     private int dailyApplicationLimit = 20;
-
-    /** Composite score at/above which a match is "high-priority" and still routes to human review even with autoApply on. */
-    private double highPriorityReviewThreshold = 0.85;
 
     // --- Notifications ---
 
@@ -140,6 +147,7 @@ public class AutopilotSettings {
         if (r.includeKeywords() != null) this.includeKeywords = new HashSet<>(r.includeKeywords());
         if (r.excludeKeywords() != null) this.excludeKeywords = new HashSet<>(r.excludeKeywords());
         if (r.enabledJobSources() != null) this.enabledJobSources = new HashSet<>(r.enabledJobSources());
+        if (r.trackedCompanySlugs() != null) this.trackedCompanySlugs = new HashSet<>(r.trackedCompanySlugs());
         if (r.autoApply() != null) this.autoApply = r.autoApply();
         if (r.aiTailorResume() != null) this.aiTailorResume = r.aiTailorResume();
         if (r.generateCoverLetter() != null) this.generateCoverLetter = r.generateCoverLetter();
@@ -264,6 +272,10 @@ public class AutopilotSettings {
         return enabledJobSources;
     }
 
+    public Set<String> getTrackedCompanySlugs() {
+        return trackedCompanySlugs;
+    }
+
     public boolean isAutoApply() {
         return autoApply;
     }
@@ -294,10 +306,6 @@ public class AutopilotSettings {
 
     public int getDailyApplicationLimit() {
         return dailyApplicationLimit;
-    }
-
-    public double getHighPriorityReviewThreshold() {
-        return highPriorityReviewThreshold;
     }
 
     public boolean isNotifyNewMatches() {

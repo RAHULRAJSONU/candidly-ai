@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import ai.candidly.career.domain.JobPosting;
 import ai.candidly.career.domain.JobPostingRepository;
 import ai.candidly.career.domain.ScreeningDecision;
+import ai.candidly.career.retrieval.SimilarPostingJudgeService;
 import jakarta.validation.Valid;
 
 @RestController
@@ -25,10 +26,13 @@ public class JobPostingController {
 
     private final JobPostingIngestionService ingestionService;
     private final JobPostingRepository jobPostingRepository;
+    private final SimilarPostingJudgeService similarPostingJudgeService;
 
-    public JobPostingController(JobPostingIngestionService ingestionService, JobPostingRepository jobPostingRepository) {
+    public JobPostingController(JobPostingIngestionService ingestionService, JobPostingRepository jobPostingRepository,
+            SimilarPostingJudgeService similarPostingJudgeService) {
         this.ingestionService = ingestionService;
         this.jobPostingRepository = jobPostingRepository;
+        this.similarPostingJudgeService = similarPostingJudgeService;
     }
 
     @PostMapping
@@ -45,14 +49,22 @@ public class JobPostingController {
 
     /**
      * The Job Discovery UI's listing - excludes BLOCKed postings (failed the guardrail
-     * screen). No stable ordering guarantee: {@code JobPosting} has no timestamp column
-     * to sort by (see docs/00-04 - not yet needed anywhere the DB itself doesn't already
-     * order rows).
+     * screen), newest-discovered first.
      */
     @GetMapping
     public List<JobPosting> list() {
         return jobPostingRepository.findAll().stream()
                 .filter(job -> job.getScreeningDecision() != ScreeningDecision.BLOCK)
+                .sorted(java.util.Comparator.comparing(JobPosting::getDiscoveredAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
                 .toList();
+    }
+
+    /** Backs the Job Discovery detail panel's "Similar Jobs" tab - see SimilarPostingJudgeService. */
+    @GetMapping("/{id}/similar")
+    public List<JobPosting> similar(@PathVariable UUID id) {
+        JobPosting reference = jobPostingRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatusCode.valueOf(404), "Job posting not found"));
+        return similarPostingJudgeService.findSimilar(reference, jobPostingRepository.findAll());
     }
 }

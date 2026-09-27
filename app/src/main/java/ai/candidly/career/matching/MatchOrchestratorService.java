@@ -62,6 +62,10 @@ public class MatchOrchestratorService {
             reasons.add("skill=%.2f experience=%.2f semantic=%.2f domain=%.2f composite=%.2f (threshold %.2f)"
                     .formatted(breakdown.skillScore(), breakdown.experienceScore(), breakdown.semanticScore(),
                             breakdown.domainScore(), breakdown.compositeScore(), shortlistThreshold));
+            if (job.getMandatorySkillIds().isEmpty() && job.getPreferredSkillIds().isEmpty()) {
+                reasons.add("skill dimension not comparable (job stated no required/preferred skills) - "
+                        + "its weight was redistributed across experience/semantic/domain, not counted as a perfect match");
+            }
 
             scorecard = new MatchScorecard(candidate, job, true, breakdown.skillScore(), breakdown.experienceScore(),
                     breakdown.semanticScore(), breakdown.domainScore(), breakdown.compositeScore(), shortlisted, reasons);
@@ -77,8 +81,11 @@ public class MatchOrchestratorService {
                     scorecardRepository.flush();
                 });
         MatchScorecard saved = scorecardRepository.save(scorecard);
+        // shortlisted=%s is parsed by AuditController's pipeline-feed endpoint to tell a
+        // "scored but not shortlisted" event apart from a "shortlisted" one.
         auditLedgerService.record(AuditEventType.MATCH_SCORED, candidate.getId(),
-                "job=%s %s".formatted(job.getId(), String.join("; ", saved.getReasonCodes())));
+                "job=%s shortlisted=%s %s".formatted(job.getId(), saved.isShortlisted(),
+                        String.join("; ", saved.getReasonCodes())));
         return saved;
     }
 }

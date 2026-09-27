@@ -1,7 +1,9 @@
 package ai.candidly.career.discovery;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
@@ -53,9 +55,11 @@ public class GreenhouseDiscoveryAdapter implements JobBoardDiscoveryAdapter {
     }
 
     @Override
-    public List<DiscoveredJobPosting> poll() {
+    public List<DiscoveredJobPosting> poll(List<String> additionalTargets) {
         List<DiscoveredJobPosting> postings = new ArrayList<>();
-        for (String boardToken : properties.getBoardTokens()) {
+        Set<String> boardTokens = new LinkedHashSet<>(properties.getBoardTokens());
+        boardTokens.addAll(additionalTargets);
+        for (String boardToken : boardTokens) {
             try {
                 postings.addAll(pollBoard(boardToken));
             } catch (HttpStatusCodeException e) {
@@ -95,7 +99,11 @@ public class GreenhouseDiscoveryAdapter implements JobBoardDiscoveryAdapter {
                     job.title(),
                     locationName,
                     REMOTE_HINT.matcher(locationName == null ? "" : locationName).find(),
-                    plainDescription));
+                    plainDescription,
+                    // Greenhouse's public Job Board API response has no compensation field at
+                    // all for this board (confirmed by inspecting the raw response keys, not
+                    // just an empty value) - see DiscoveredJobPosting's javadoc.
+                    null, null, null));
         }
         return result;
     }

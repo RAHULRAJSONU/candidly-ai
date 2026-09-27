@@ -64,6 +64,18 @@
 			<version>5.3.0</version>
 		</dependency>
 
+		<!-- discovery.HeadlessCareerPageDiscoveryAdapter: headless Chromium so this adapter
+		     can read company career pages that render their job listings client-side (most
+		     of them - see GenericJsonLdDiscoveryAdapter's javadoc for the honest gap this
+		     fills). Scoped to company-owned career-page URLs only, never linkedin.com - see
+		     the adapter's own javadoc. First run downloads a Chromium binary via Playwright's
+		     driver bootstrap (needs network access once; not offline-buildable the first time). -->
+		<dependency>
+			<groupId>com.microsoft.playwright</groupId>
+			<artifactId>playwright</artifactId>
+			<version>1.48.0</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator-test</artifactId>

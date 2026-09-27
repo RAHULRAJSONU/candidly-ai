@@ -12,6 +12,8 @@ public record JobPostingRequest(
         boolean remote,
         Long compMinMinorUnits,
         Long compMaxMinorUnits,
+        /** ISO 4217 code for the comp fields above; optional, null reads as USD (see JobPosting#getCurrency). */
+        String currency,
         Set<String> acceptedWorkAuthorizations,
         Set<String> mandatorySkillMentions,
         Set<String> preferredSkillMentions,

@@ -11,4 +11,6 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, UUID> {
     Optional<JobPosting> findByDedupeHash(String dedupeHash);
 
     List<JobPosting> findByCompanyIgnoreCase(String company);
+
+    long countByScreeningDecision(ScreeningDecision screeningDecision);
 }

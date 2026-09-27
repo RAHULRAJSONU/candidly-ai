@@ -1,5 +1,6 @@
 package ai.candidly.career.domain;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -12,6 +13,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 /**
@@ -44,6 +46,14 @@ public class JobPosting {
 
     private Long compMinMinorUnits;
     private Long compMaxMinorUnits;
+
+    /** ISO 4217 code the comp fields above are denominated in - the posting's own currency,
+     * independent of any candidate's preference, and never converted (see {@link
+     * CurrencyCodes}). Set via {@link #assignCurrency} rather than a constructor parameter
+     * (same reason as {@link #discoveredAt}); nullable for ddl-auto=update on an existing
+     * table, reading as {@link CurrencyCodes#DEFAULT} - every posting ingested before this
+     * field existed was entered against USD-labelled UI. */
+    private String currency;
 
     /** Work authorizations this role can legally accept; empty = no restriction stated. */
     @ElementCollection(fetch = jakarta.persistence.FetchType.EAGER)
@@ -81,8 +91,23 @@ public class JobPosting {
     private String embeddingModel;
     private int embeddingVersion;
 
+    @Enumerated(EnumType.STRING)
+    private JobPostingSource source = JobPostingSource.MANUAL;
+
+    /** When this row was first persisted - set once via {@link #onPrePersist()} rather than a
+     * constructor parameter, so the many existing call sites (adapters, tests, direct API
+     * submission) don't all need to start passing a timestamp. */
+    private Instant discoveredAt;
+
     protected JobPosting() {
         // JPA
+    }
+
+    @PrePersist
+    private void onPrePersist() {
+        if (discoveredAt == null) {
+            discoveredAt = Instant.now();
+        }
     }
 
     public JobPosting(String dedupeHash, String company, String title, String location, boolean remote,
@@ -109,10 +134,42 @@ public class JobPosting {
         this.screeningReasons = reasons;
     }
 
+    /** Backfills skill/domain/experience fields a discovery adapter couldn't supply - see
+     * {@code JobPostingExtractionService}. Callers are responsible for only invoking this
+     * when the fields were actually empty, so an explicitly-submitted (e.g. MANUAL) value
+     * is never overwritten. */
+    public void applyExtraction(Set<String> mandatorySkillIds, Set<String> preferredSkillIds, String domain,
+            int minYearsExperience) {
+        this.mandatorySkillIds = new HashSet<>(mandatorySkillIds);
+        this.preferredSkillIds = new HashSet<>(preferredSkillIds);
+        this.domain = domain;
+        this.minYearsExperience = minYearsExperience;
+    }
+
     public void assignEmbedding(float[] embedding, String embeddingModel, int embeddingVersion) {
         this.embedding = embedding;
         this.embeddingModel = embeddingModel;
         this.embeddingVersion = embeddingVersion;
+    }
+
+    public void assignSource(JobPostingSource source) {
+        this.source = source;
+    }
+
+    public JobPostingSource getSource() {
+        return source;
+    }
+
+    public void assignCurrency(String currency) {
+        this.currency = currency;
+    }
+
+    public String getCurrency() {
+        return currency == null ? CurrencyCodes.DEFAULT : currency;
+    }
+
+    public Instant getDiscoveredAt() {
+        return discoveredAt;
     }
 
     public UUID getId() {

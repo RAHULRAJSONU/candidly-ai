@@ -27,15 +27,23 @@ import ai.candidly.career.domain.Candidate;
 import ai.candidly.career.domain.CandidateExperience;
 import ai.candidly.career.domain.CandidateExperienceRepository;
 import ai.candidly.career.domain.CandidateRepository;
+import ai.candidly.career.domain.CandidatePhotoRepository;
+import ai.candidly.career.domain.CandidateResumeRepository;
 import ai.candidly.career.domain.MatchScorecardRepository;
 import ai.candidly.career.domain.TailoredArtifactRepository;
 import ai.candidly.career.domain.TailoringJobRepository;
 import ai.candidly.career.demographics.CandidateDemographicsRepository;
+import ai.candidly.career.autopilot.AutopilotSettingsRepository;
+import ai.candidly.career.emailintake.EmailIntakeRecordRepository;
 import ai.candidly.career.pipeline.InterviewRepository;
+import ai.candidly.career.pipeline.ManualApplicationRepository;
 import ai.candidly.career.pipeline.OfferRepository;
+import ai.candidly.career.settings.CandidateSettingsRepository;
 import ai.candidly.career.vault.AchievementRepository;
+import ai.candidly.career.vault.CandidateSkillProfileRepository;
 import ai.candidly.career.vault.CertificationRepository;
 import ai.candidly.career.vault.EducationRepository;
+import ai.candidly.career.vault.ProjectRepository;
 
 @ExtendWith(MockitoExtension.class)
 class CandidateDataSubjectServiceTest {
@@ -59,9 +67,25 @@ class CandidateDataSubjectServiceTest {
     @Mock
     private CertificationRepository certificationRepository;
     @Mock
+    private ProjectRepository projectRepository;
+    @Mock
+    private CandidateSkillProfileRepository skillProfileRepository;
+    @Mock
     private InterviewRepository interviewRepository;
     @Mock
     private OfferRepository offerRepository;
+    @Mock
+    private ManualApplicationRepository manualApplicationRepository;
+    @Mock
+    private EmailIntakeRecordRepository emailIntakeRecordRepository;
+    @Mock
+    private AutopilotSettingsRepository autopilotSettingsRepository;
+    @Mock
+    private CandidateResumeRepository candidateResumeRepository;
+    @Mock
+    private CandidatePhotoRepository candidatePhotoRepository;
+    @Mock
+    private CandidateSettingsRepository candidateSettingsRepository;
     @Mock
     private AuditEventRepository auditEventRepository;
     @Mock
@@ -71,15 +95,17 @@ class CandidateDataSubjectServiceTest {
         return new CandidateDataSubjectService(candidateRepository, candidateExperienceRepository,
                 matchScorecardRepository, tailoredArtifactRepository, tailoringJobRepository,
                 candidateDemographicsRepository, achievementRepository, educationRepository, certificationRepository,
-                interviewRepository, offerRepository, auditEventRepository, auditLedgerService);
+                projectRepository, skillProfileRepository, interviewRepository, offerRepository, manualApplicationRepository,
+                emailIntakeRecordRepository, autopilotSettingsRepository, candidateResumeRepository,
+                candidatePhotoRepository, candidateSettingsRepository, auditEventRepository, auditLedgerService);
     }
 
     @Test
     void eraseDeletesEveryOwnedTableAndRecordsAnAuditEventWithoutDeletingAuditHistory() {
         UUID candidateId = UUID.randomUUID();
-        Candidate candidate = new Candidate("Ada Lovelace", "ada@example.com", "Remote", Set.of("US"), 0, Set.of());
+        Candidate candidate = new Candidate("Ada Lovelace", "ada@example.com", "Remote", Set.of("US"), 0, Set.of(), Set.of());
         CandidateExperience experience = new CandidateExperience(candidate, "Acme", "Engineer",
-                LocalDate.of(2020, 1, 1), null, "Built things.", Set.of(), Set.of());
+                LocalDate.of(2020, 1, 1), null, "Built things.", Set.of(), Set.of(), Set.of());
 
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(tailoringJobRepository.findByCandidateId(candidateId)).thenReturn(List.of());
@@ -94,6 +120,7 @@ class CandidateDataSubjectServiceTest {
         verify(matchScorecardRepository).deleteAll(List.of());
         verify(candidateExperienceRepository).deleteAll(List.of(experience));
         verify(candidateDemographicsRepository).deleteByCandidateId(candidateId);
+        verify(skillProfileRepository).deleteByCandidateId(candidateId);
         verify(candidateRepository).delete(candidate);
         verify(auditLedgerService).record(eq(AuditEventType.CANDIDATE_DATA_ERASED), eq(candidateId), any());
         verify(auditEventRepository, never()).deleteAll();
@@ -113,7 +140,7 @@ class CandidateDataSubjectServiceTest {
     @Test
     void exportBundlesEveryOwnedTablePlusDecisionHistory() {
         UUID candidateId = UUID.randomUUID();
-        Candidate candidate = new Candidate("Ada Lovelace", "ada@example.com", "Remote", Set.of("US"), 0, Set.of());
+        Candidate candidate = new Candidate("Ada Lovelace", "ada@example.com", "Remote", Set.of("US"), 0, Set.of(), Set.of());
 
         when(candidateRepository.findById(candidateId)).thenReturn(Optional.of(candidate));
         when(candidateExperienceRepository.findByCandidateId(candidateId)).thenReturn(List.of());

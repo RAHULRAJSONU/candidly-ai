@@ -11,6 +11,7 @@ import ai.candidly.career.domain.Candidate;
 import ai.candidly.career.domain.CandidateExperience;
 import ai.candidly.career.domain.CandidateExperienceRepository;
 import ai.candidly.career.domain.CandidateRepository;
+import ai.candidly.career.domain.CurrencyCodes;
 import ai.candidly.career.taxonomy.SkillNormalizationService;
 
 /**
@@ -39,11 +40,16 @@ public class CandidateIngestionService {
 
     @Transactional
     public Candidate ingest(CandidateRequest request) {
+        // Validated before normalizeAll, which makes billed embedding/TypeSafe calls.
+        String currency = request.preferredCurrency() == null ? null
+                : CurrencyCodes.normalize(request.preferredCurrency(), "preferredCurrency");
         Set<String> candidateSkillIds = normalizeAll(request.rawSkillMentions());
-        Candidate candidate = candidateRepository.save(new Candidate(
+        Candidate newCandidate = new Candidate(
                 request.fullName(), request.email(), request.location(),
                 request.workAuthorizations(), request.compFloorMinorUnits(), candidateSkillIds,
-                request.rawSkillMentions() == null ? Set.of() : request.rawSkillMentions()));
+                request.rawSkillMentions() == null ? Set.of() : request.rawSkillMentions());
+        newCandidate.setPreferredCurrency(currency);
+        Candidate candidate = candidateRepository.save(newCandidate);
 
         for (CandidateRequest.ExperienceRequest expRequest : request.experiences()) {
             Set<String> experienceSkillIds = normalizeAll(expRequest.rawSkillMentions());

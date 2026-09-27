@@ -49,6 +49,12 @@ public class EmailIntakeController {
         return emailReviewService.needsReview(candidateId);
     }
 
+    /** Every classified email tied to the same job posting - the mock's "Previous Emails" tab. */
+    @GetMapping("/thread")
+    public List<EmailIntakeRecord> thread(@PathVariable UUID candidateId, @org.springframework.web.bind.annotation.RequestParam UUID jobPostingId) {
+        return emailReviewService.thread(candidateId, jobPostingId);
+    }
+
     @PostMapping("/{recordId}/approve-send")
     public EmailIntakeRecord approveSend(@PathVariable UUID candidateId, @PathVariable UUID recordId,
             @RequestBody Map<String, String> body) {
@@ -65,6 +71,12 @@ public class EmailIntakeController {
     public EmailIntakeRecord schedule(@PathVariable UUID candidateId, @PathVariable UUID recordId,
             @RequestBody Map<String, String> body) {
         return emailReviewService.schedule(recordId, body.get("note"));
+    }
+
+    @PostMapping("/{recordId}/suggest-alternative")
+    public EmailIntakeRecord suggestAlternative(@PathVariable UUID candidateId, @PathVariable UUID recordId,
+            @RequestBody Map<String, String> body) {
+        return emailReviewService.suggestAlternative(recordId, body.get("alternativeText"), body.get("note"));
     }
 
     @PostMapping("/{recordId}/cancel")

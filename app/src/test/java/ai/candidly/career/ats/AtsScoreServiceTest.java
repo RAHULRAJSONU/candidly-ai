@@ -20,7 +20,7 @@ class AtsScoreServiceTest {
     void wellFormedResumeScoresHighAndCoversMandatoryKeywords() {
         JobPosting job = new JobPosting("hash-1", "Acme", "Backend Engineer", "Remote", true, null, null, Set.of(),
                 Set.of("skill.java", "skill.spring"), Set.of(), "fintech", 5, "raw");
-        Candidate candidate = new Candidate("Test", "t@example.com", "Remote", Set.of("US"), 0, Set.of());
+        Candidate candidate = new Candidate("Test", "t@example.com", "Remote", Set.of("US"), 0, Set.of(), Set.of());
         String content = "SUMMARY\nExperienced engineer.\n\nEXPERIENCE\nAcme, 2020-2024, built systems using Java and Spring.\n"
                 + "Delivered scalable services and mentored engineers across several teams. "
                 + ("padding word ".repeat(100))
@@ -38,7 +38,7 @@ class AtsScoreServiceTest {
     void emptyContentFailsMostChecks() {
         JobPosting job = new JobPosting("hash-2", "Acme", "Backend Engineer", "Remote", true, null, null, Set.of(),
                 Set.of("skill.java"), Set.of(), "fintech", 5, "raw");
-        Candidate candidate = new Candidate("Test", "t@example.com", "Remote", Set.of("US"), 0, Set.of());
+        Candidate candidate = new Candidate("Test", "t@example.com", "Remote", Set.of("US"), 0, Set.of(), Set.of());
         TailoredArtifact artifact = new TailoredArtifact(candidate, job, "", 0, false, List.of(),
                 TailoredArtifactStatus.NEEDS_HUMAN_REVIEW);
 

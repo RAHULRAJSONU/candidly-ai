@@ -15,6 +15,8 @@ public record CandidateRequest(
         @NotBlank String location,
         @NotEmpty Set<String> workAuthorizations,
         long compFloorMinorUnits,
+        /** ISO 4217 code compFloorMinorUnits is in; optional, null reads as USD (see Candidate#getPreferredCurrency). */
+        String preferredCurrency,
         @NotEmpty Set<String> rawSkillMentions,
         @Valid List<ExperienceRequest> experiences) {
 

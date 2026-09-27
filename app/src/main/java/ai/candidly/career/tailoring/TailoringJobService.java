@@ -10,6 +10,7 @@ import ai.candidly.career.domain.JobPosting;
 import ai.candidly.career.domain.TailoringJob;
 import ai.candidly.career.domain.TailoringJobRepository;
 import ai.candidly.career.domain.TailoringJobStatus;
+import ai.candidly.career.settings.CandidateSettingsService;
 
 /**
  * Submission half of async tailoring (docs/03 §4): creates/reuses the {@link
@@ -21,14 +22,21 @@ public class TailoringJobService {
 
     private final TailoringJobRepository tailoringJobRepository;
     private final TailoringAsyncExecutor asyncExecutor;
+    private final CandidateSettingsService settingsService;
 
-    public TailoringJobService(TailoringJobRepository tailoringJobRepository, TailoringAsyncExecutor asyncExecutor) {
+    public TailoringJobService(TailoringJobRepository tailoringJobRepository, TailoringAsyncExecutor asyncExecutor,
+            CandidateSettingsService settingsService) {
         this.tailoringJobRepository = tailoringJobRepository;
         this.asyncExecutor = asyncExecutor;
+        this.settingsService = settingsService;
     }
 
+    /** @throws CandidateSettingsService.AiFeatureDisabledException if the candidate has
+     * turned AI resume tailoring off on the Settings page - see {@link
+     * ai.candidly.career.api.TailoringController#tailor} for the HTTP mapping. */
     @Transactional
     public TailoringJob submit(Candidate candidate, JobPosting job) {
+        settingsService.requireResumeTailoringEnabled(candidate.getId());
         var existing = tailoringJobRepository.findByCandidateIdAndJobPostingId(candidate.getId(), job.getId());
         if (existing.isPresent()
                 && (existing.get().getStatus() == TailoringJobStatus.QUEUED

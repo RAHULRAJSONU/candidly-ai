@@ -2,7 +2,10 @@ package ai.candidly.career.audit;
 
 /** The decision points docs/02 §4.3 (LL144) and §4.4 (adverse action) require a durable record of. */
 public enum AuditEventType {
+    JOB_POSTING_DISCOVERED,
     JOB_POSTING_SCREENED,
+    JOB_POSTING_EXTRACTED,
+    JOB_POSTING_EMBEDDED,
     MATCH_SCORED,
     TAILORED_ARTIFACT_GENERATED,
     TAILORED_ARTIFACT_REVIEWED,
@@ -13,5 +16,7 @@ public enum AuditEventType {
     AUTOPILOT_CYCLE_COMPLETED,
     EMAIL_CLASSIFIED,
     EMAIL_REPLY_REVIEWED,
-    CANDIDATE_SUBMITTED_APPLICATION
+    CANDIDATE_SUBMITTED_APPLICATION,
+    AUTOPILOT_EXCLUSION_FILTERED,
+    EMAIL_SCAM_RISK_FLAGGED
 }

@@ -9,9 +9,11 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import ai.candidly.career.audit.AuditEvent;
 import ai.candidly.career.audit.AuditEventType;
 import ai.candidly.career.audit.AuditLedgerService;
 import ai.candidly.career.audit.AuditEventRepository;
@@ -28,28 +30,25 @@ import ai.candidly.career.tailoring.TailoringJobService;
 import ai.candidly.career.tailoring.TailoringReviewService;
 
 /**
- * The "AI Job Application Agent" (Autopilot mock concept) - discover, score, tailor and
- * (conditionally) approve applications with no human step, on a schedule. This is a
- * deliberate, explicit product decision to build the concept docs/00/docs/02 originally
- * excluded for contradicting the HITL-by-default guarantee - made at the user's direction
- * after being shown that tradeoff.
+ * The "AI Job Application Agent" (Autopilot mock concept) - discovers, scores and tailors
+ * applications on a schedule with no manual step, but never submits one past this app's
+ * existing human-in-the-loop gate. This is a deliberate scoping decision: docs/00/docs/02's
+ * core no-auto-submission/HITL-by-default guarantee is a load-bearing compliance property
+ * (adverse-action and LL144 reasoning both assume a human decided to submit), not a default
+ * this feature gets to relax just because the mock depicts full autonomy.
  *
- * <p><b>Scoping boundary that IS still enforced:</b> "Apply" never fires an outbound HTTP
- * request at a real third-party ATS (Greenhouse/Lever/etc "apply" endpoint) on a
- * candidate's behalf - this codebase has no such adapter, and building one that
- * auto-submits at scale to live employers without a per-submission human decision is a
- * different, much higher-stakes kind of action than the rest of this feature (irreversible,
- * affects real third parties, no way to validate correctness of an AI-generated submission
- * to a real company from here). Instead, "apply" reuses the exact mechanism the HITL
- * console already treats as the end of this app's responsibility: moving a {@link
- * TailoredArtifact} to {@link TailoredArtifactStatus#APPROVED} via {@link
- * TailoringReviewService#approve}, just without a human clicking it - matching how
- * docs/04 FR-5 already draws the line (approval clears the artifact for the candidate's
- * own session; nothing in this app has ever submitted past that point, autopilot or not).
- * A match scoring at/above {@link AutopilotSettings#getHighPriorityReviewThreshold()}
- * still lands in the ordinary HITL queue instead of auto-approving, matching the mock's
- * own "Auto Apply: Enabled (with review for high-priority roles)" copy - i.e. even the
- * mock's autonomous concept keeps a human gate at the high-stakes end.
+ * <p><b>What "Auto Apply" actually does here:</b> when enabled, each cycle finds shortlisted
+ * matches, generates a tailored resume/cover letter for up to {@link
+ * #MAX_NEW_MATCHES_PER_CYCLE} of them via the normal {@link TailoringJobService#submit}
+ * path, and leaves each resulting {@link TailoredArtifact} sitting in {@link
+ * TailoredArtifactStatus#PENDING_APPROVAL} - i.e. it pushes work into the candidate's
+ * ordinary Applications/console review queue automatically instead of requiring the
+ * candidate to trigger tailoring by hand for every match. It never calls {@link
+ * TailoringReviewService#approve}; only a human click on the Applications page (or
+ * console.html) moves an artifact to {@link TailoredArtifactStatus#APPROVED}, and this
+ * codebase has no adapter that fires an outbound submission at a real third-party ATS from
+ * there either way. "Apply" in the stage pipeline therefore means "queued for your review",
+ * not "submitted".
  *
  * <p>"Follow up" is logged to the audit ledger ({@link AuditEventType#AUTOPILOT_FOLLOW_UP_LOGGED})
  * rather than actually sending an email, for the same reason - see {@code emailintake}'s
@@ -58,8 +57,6 @@ import ai.candidly.career.tailoring.TailoringReviewService;
 @Service
 public class AutopilotService {
 
-    private static final int MAX_NEW_MATCHES_PER_CYCLE = 5;
-    private static final int RECOMMENDATION_POOL_SIZE = 15;
     private static final Set<AuditEventType> ACTIVITY_EVENT_TYPES = Set.of(
             AuditEventType.AUTOPILOT_CYCLE_STARTED,
             AuditEventType.MATCH_SCORED,
@@ -73,28 +70,38 @@ public class AutopilotService {
     private final CandidateRepository candidateRepository;
     private final JobRecommendationService jobRecommendationService;
     private final TailoringJobService tailoringJobService;
-    private final TailoringReviewService tailoringReviewService;
     private final MatchScorecardRepository matchScorecardRepository;
     private final TailoredArtifactRepository artifactRepository;
     private final InterviewRepository interviewRepository;
     private final AuditLedgerService auditLedgerService;
     private final AuditEventRepository auditEventRepository;
+    private final AutopilotExclusionJudgeService exclusionJudgeService;
+    private final int maxNewMatchesPerCycle;
+    private final int recommendationPoolSize;
+    private final int cycleIntervalHours;
 
     public AutopilotService(AutopilotSettingsRepository settingsRepository, CandidateRepository candidateRepository,
             JobRecommendationService jobRecommendationService, TailoringJobService tailoringJobService,
-            TailoringReviewService tailoringReviewService, MatchScorecardRepository matchScorecardRepository,
+            MatchScorecardRepository matchScorecardRepository,
             TailoredArtifactRepository artifactRepository, InterviewRepository interviewRepository,
-            AuditLedgerService auditLedgerService, AuditEventRepository auditEventRepository) {
+            AuditLedgerService auditLedgerService, AuditEventRepository auditEventRepository,
+            AutopilotExclusionJudgeService exclusionJudgeService,
+            @Value("${candidly.autopilot.max-new-matches-per-cycle:5}") int maxNewMatchesPerCycle,
+            @Value("${candidly.autopilot.recommendation-pool-size:15}") int recommendationPoolSize,
+            @Value("${candidly.autopilot.cycle-interval-hours:12}") int cycleIntervalHours) {
         this.settingsRepository = settingsRepository;
         this.candidateRepository = candidateRepository;
         this.jobRecommendationService = jobRecommendationService;
         this.tailoringJobService = tailoringJobService;
-        this.tailoringReviewService = tailoringReviewService;
         this.matchScorecardRepository = matchScorecardRepository;
         this.artifactRepository = artifactRepository;
         this.interviewRepository = interviewRepository;
         this.auditLedgerService = auditLedgerService;
         this.auditEventRepository = auditEventRepository;
+        this.exclusionJudgeService = exclusionJudgeService;
+        this.maxNewMatchesPerCycle = maxNewMatchesPerCycle;
+        this.recommendationPoolSize = recommendationPoolSize;
+        this.cycleIntervalHours = cycleIntervalHours;
     }
 
     @Transactional
@@ -144,20 +151,24 @@ public class AutopilotService {
 
         settings.markStage(AutopilotStage.SEARCH_JOBS, "Scanning enabled job sources for new matches");
         settings.markStage(AutopilotStage.MATCH_AND_RANK, "Scoring and ranking candidate postings");
-        List<MatchScorecard> candidates = jobRecommendationService.recommend(candidate, RECOMMENDATION_POOL_SIZE);
-        List<MatchScorecard> eligible = candidates.stream()
+        List<MatchScorecard> candidates = jobRecommendationService.recommend(candidate, recommendationPoolSize);
+        List<MatchScorecard> keywordFiltered = candidates.stream()
                 .filter(MatchScorecard::isShortlisted)
                 .filter(sc -> passesKeywordFilters(sc, settings))
                 .filter(sc -> !settings.isRemoteOnly() || sc.getJobPosting().isRemote())
                 .sorted(Comparator.comparingDouble(MatchScorecard::getCompositeScore).reversed())
                 .toList();
+        // Literal substring matching above misses paraphrases the candidate meant to exclude
+        // (e.g. "no sales" vs. "business development") - this catches what that pass can't.
+        List<MatchScorecard> eligible = exclusionJudgeService.filterConflicting(
+                candidateId, settings.getExcludeKeywords(), keywordFiltered);
 
         int remainingToday = Math.max(0, settings.getDailyApplicationLimit() - submittedToday(candidateId));
 
         settings.markStage(AutopilotStage.CUSTOMIZE, "Generating tailored resumes for new matches");
         int newlyCustomized = 0;
         for (MatchScorecard scorecard : eligible) {
-            if (newlyCustomized >= MAX_NEW_MATCHES_PER_CYCLE || newlyCustomized >= remainingToday) {
+            if (newlyCustomized >= maxNewMatchesPerCycle || newlyCustomized >= remainingToday) {
                 break;
             }
             boolean alreadyHasArtifact = artifactRepository.findByCandidateId(candidateId).stream()
@@ -171,29 +182,26 @@ public class AutopilotService {
             }
         }
 
-        settings.markStage(AutopilotStage.APPLY, "Reviewing generated artifacts for auto-submission");
-        int submittedThisCycle = 0;
+        settings.markStage(AutopilotStage.APPLY, "Queuing tailored applications in your review queue - nothing is submitted automatically");
+        int queuedThisCycle = 0;
         if (settings.isAutoApply()) {
             List<TailoredArtifact> pending = artifactRepository.findByCandidateId(candidateId).stream()
                     .filter(a -> a.getStatus() == TailoredArtifactStatus.PENDING_APPROVAL)
                     .toList();
+            Set<String> alreadyQueued = auditEventRepository.findBySubjectIdOrderByOccurredAtAsc(candidateId).stream()
+                    .filter(e -> e.getEventType() == AuditEventType.AUTOPILOT_APPLICATION_SUBMITTED)
+                    .map(AuditEvent::getDetails)
+                    .collect(java.util.stream.Collectors.toSet());
             for (TailoredArtifact artifact : pending) {
-                if (remainingToday - submittedThisCycle <= 0) {
-                    break;
+                String marker = "job=" + artifact.getJobPosting().getId();
+                boolean alreadyLogged = alreadyQueued.stream().anyMatch(d -> d.startsWith(marker));
+                if (alreadyLogged) {
+                    continue;
                 }
-                MatchScorecard scorecard = matchScorecardRepository
-                        .findByCandidateIdAndJobPostingId(candidateId, artifact.getJobPosting().getId())
-                        .orElse(null);
-                boolean highPriority = scorecard != null
-                        && scorecard.getCompositeScore() >= settings.getHighPriorityReviewThreshold();
-                if (highPriority) {
-                    continue; // left in the ordinary HITL queue for a human to decide
-                }
-                tailoringReviewService.approve(artifact.getId(), "Auto-approved by Autopilot agent (auto-apply enabled)");
                 auditLedgerService.record(AuditEventType.AUTOPILOT_APPLICATION_SUBMITTED, candidateId,
-                        "job=%s company=%s title=%s".formatted(artifact.getJobPosting().getId(),
-                                artifact.getJobPosting().getCompany(), artifact.getJobPosting().getTitle()));
-                submittedThisCycle++;
+                        "%s company=%s title=%s queued in your Applications review queue - approve or reject there before anything is submitted"
+                                .formatted(marker, artifact.getJobPosting().getCompany(), artifact.getJobPosting().getTitle()));
+                queuedThisCycle++;
             }
         }
 
@@ -205,12 +213,12 @@ public class AutopilotService {
         }
 
         settings.recordRun(Instant.now());
-        settings.scheduleNextRun(Instant.now().plus(Duration.ofHours(12)));
+        settings.scheduleNextRun(Instant.now().plus(Duration.ofHours(cycleIntervalHours)));
         settings.markStage(AutopilotStage.IDLE, "Cycle complete - waiting for next scheduled run");
         settingsRepository.save(settings);
 
         auditLedgerService.record(AuditEventType.AUTOPILOT_CYCLE_COMPLETED, candidateId,
-                "matchesFound=%d customized=%d submitted=%d".formatted(eligible.size(), newlyCustomized, submittedThisCycle));
+                "matchesFound=%d customized=%d queuedForReview=%d".formatted(eligible.size(), newlyCustomized, queuedThisCycle));
     }
 
     private void runFollowUps(UUID candidateId) {

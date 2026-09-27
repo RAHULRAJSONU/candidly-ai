@@ -1,0 +1,26 @@
+# Build output
+app/target/
+frontend/dist/
+frontend/node_modules/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.*
+
+# Local scratch artifacts
+*.png
+!docs/ui_ux_mock/*.png
+!frontend/public/**/*.png
+!app/src/main/resources/**/*.png

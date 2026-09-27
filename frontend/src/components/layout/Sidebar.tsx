@@ -6,7 +6,7 @@ import {
   Sparkles,
   FolderKanban,
   ShieldCheck,
-  Briefcase,
+  FileText,
   MessageSquareText,
   GitBranch,
   UserPlus,
@@ -14,6 +14,7 @@ import {
   Inbox,
   UserCheck,
   Settings as SettingsIcon,
+  Cpu,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -24,10 +25,11 @@ const NAV_ITEMS = [
   { to: '/autopilot', label: 'Autopilot', icon: Bot },
   { to: '/email-inbox', label: 'Email Inbox', icon: Inbox },
   { to: '/email-review', label: 'Agent Email Review', icon: UserCheck },
-  { to: '/career-vault', label: 'Career Vault', icon: Briefcase },
+  { to: '/career-vault', label: 'Career Vault', icon: FileText },
   { to: '/interview-prep', label: 'Interview Prep', icon: MessageSquareText },
   { to: '/pipeline', label: 'Pipeline', icon: GitBranch },
   { to: '/compliance', label: 'Compliance', icon: ShieldCheck },
+  { to: '/ai-ops', label: 'AI Ops', icon: Cpu },
   { to: '/onboarding', label: 'New Candidate', icon: UserPlus },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]
@@ -39,7 +41,7 @@ const PANEL_COPY: Record<string, { heading: string; quote: string }> = {
   '/matches': { heading: 'Dream. Build. Advance.', quote: 'Same skills. Bigger possibilities.' },
   '/applications': { heading: 'Track. Learn. Grow.', quote: 'Every application is a step forward.' },
   '/autopilot': { heading: 'Let the agent work while you focus on what matters.', quote: 'Autonomy, with a human still holding the line.' },
-  '/career-vault': { heading: 'Your experience has value.', quote: 'Verified today. Greater opportunities tomorrow.' },
+  '/career-vault': { heading: 'Better Opportunities Are Built by You.', quote: 'Invest in your skills, the returns last a lifetime.' },
   '/interview-prep': { heading: 'Prepare today. Perform tomorrow.', quote: 'Confidence creates opportunity.' },
   '/pipeline': { heading: 'Consistent actions create extraordinary opportunities.', quote: 'You’re not just applying. You’re building a future.' },
   '/compliance': { heading: 'Trust. Transparency. Better opportunities.', quote: 'Ethical AI for a fairer career journey.' },

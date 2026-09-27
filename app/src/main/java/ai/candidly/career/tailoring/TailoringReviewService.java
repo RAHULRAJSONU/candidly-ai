@@ -89,7 +89,8 @@ public class TailoringReviewService {
         artifact.approve(note);
         TailoredArtifact saved = artifactRepository.save(artifact);
         auditLedgerService.record(AuditEventType.TAILORED_ARTIFACT_REVIEWED, artifact.getCandidate().getId(),
-                "artifact=%s decision=APPROVED note=%s".formatted(artifactId, note));
+                "artifact=%s job=%s decision=APPROVED note=%s"
+                        .formatted(artifactId, artifact.getJobPosting().getId(), note));
         return saved;
     }
 
@@ -99,7 +100,8 @@ public class TailoringReviewService {
         artifact.reject(note);
         TailoredArtifact saved = artifactRepository.save(artifact);
         auditLedgerService.record(AuditEventType.TAILORED_ARTIFACT_REVIEWED, artifact.getCandidate().getId(),
-                "artifact=%s decision=REJECTED note=%s".formatted(artifactId, note));
+                "artifact=%s job=%s decision=REJECTED note=%s"
+                        .formatted(artifactId, artifact.getJobPosting().getId(), note));
         return saved;
     }
 

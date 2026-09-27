@@ -13,6 +13,8 @@ import ai.candidly.career.domain.JobPosting;
 import ai.candidly.career.domain.TailoredArtifact;
 import ai.candidly.career.domain.TailoredArtifactRepository;
 import ai.candidly.career.domain.TailoredArtifactStatus;
+import ai.candidly.career.settings.CandidateSettings;
+import ai.candidly.career.settings.CandidateSettingsService;
 
 /**
  * The evaluator-optimizer loop (docs/00 §3, docs/03 §4-5): generate, run the
@@ -35,6 +37,7 @@ public class ResumeTailoringService {
     private final ClaimToneVerifier toneVerifier;
     private final CandidateExperienceRepository experienceRepository;
     private final TailoredArtifactRepository artifactRepository;
+    private final CandidateSettingsService settingsService;
     private final int maxCriticLoops;
 
     public ResumeTailoringService(GroundedResumeGenerator generator,
@@ -42,12 +45,14 @@ public class ResumeTailoringService {
             ClaimToneVerifier toneVerifier,
             CandidateExperienceRepository experienceRepository,
             TailoredArtifactRepository artifactRepository,
+            CandidateSettingsService settingsService,
             @Value("${candidly.tailoring.max-critic-loops}") int maxCriticLoops) {
         this.generator = generator;
         this.groundingVerifier = groundingVerifier;
         this.toneVerifier = toneVerifier;
         this.experienceRepository = experienceRepository;
         this.artifactRepository = artifactRepository;
+        this.settingsService = settingsService;
         this.maxCriticLoops = maxCriticLoops;
     }
 
@@ -57,6 +62,9 @@ public class ResumeTailoringService {
         if (experiences.isEmpty()) {
             throw new IllegalStateException("Candidate has no verified experience to ground a resume in");
         }
+        CandidateSettings settings = settingsService.get(candidate.getId());
+        String responseStyle = settings.getResponseStyle();
+        String levelOfDetail = settings.getLevelOfDetail();
 
         List<String> acceptedBullets = new ArrayList<>();
         List<String> lastRejections = List.of();
@@ -65,7 +73,7 @@ public class ResumeTailoringService {
 
         for (int loop = 1; loop <= maxCriticLoops; loop++) {
             loopsUsed = loop;
-            List<String> bullets = generator.generateBullets(experiences, job, feedback);
+            List<String> bullets = generator.generateBullets(experiences, job, feedback, responseStyle, levelOfDetail);
 
             List<DeterministicGroundingVerifier.VerifiedBullet> groundingResults = groundingVerifier.verify(bullets, experiences);
             List<String> groundedBullets = groundingResults.stream()
@@ -106,7 +114,9 @@ public class ResumeTailoringService {
 
         TailoredArtifact artifact = new TailoredArtifact(candidate, job, String.join("\n", acceptedBullets),
                 loopsUsed, groundingPassed, lastRejections, status);
-        artifact.setCoverLetterContent(generateGroundedCoverLetter(experiences, job));
+        artifact.setCoverLetterContent(settings.isAiCoverLetterGeneration()
+                ? generateGroundedCoverLetter(experiences, job, responseStyle, levelOfDetail)
+                : null);
         artifact.setScreeningAnswers(generateGroundedScreeningAnswers(experiences, job, candidate));
         return artifactRepository.save(artifact);
     }
@@ -115,10 +125,12 @@ public class ResumeTailoringService {
      * Single-pass grounded generation (no critic loop) for the cover letter: it's a
      * secondary artifact alongside the resume bullets, so this reuses the same
      * deterministic verifier but drops any ungrounded sentence rather than retrying -
-     * an empty result just means the panel is omitted client-side.
+     * an empty result just means the panel is omitted client-side. Only called when the
+     * candidate's Settings &gt; AI Preferences "AI cover letter generation" toggle is on.
      */
-    private String generateGroundedCoverLetter(List<ai.candidly.career.domain.CandidateExperience> experiences, JobPosting job) {
-        String raw = generator.generateCoverLetter(experiences, job);
+    private String generateGroundedCoverLetter(List<ai.candidly.career.domain.CandidateExperience> experiences, JobPosting job,
+            String responseStyle, String levelOfDetail) {
+        String raw = generator.generateCoverLetter(experiences, job, responseStyle, levelOfDetail);
         List<String> sentences = List.of(raw.split("(?<=[.!?])\\s+"));
         List<String> grounded = groundingVerifier.verify(sentences, experiences).stream()
                 .filter(DeterministicGroundingVerifier.VerifiedBullet::passed)

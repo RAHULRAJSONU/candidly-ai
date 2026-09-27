@@ -12,8 +12,8 @@ import java.util.Set;
  * persisted - the candidate reviews and edits every field before the existing
  * {@code POST /api/candidates} submits anything.
  */
-public record ProfileImportResult(String fullName, String email, String location, Set<String> rawSkillMentions,
-        List<ExperienceDraft> experiences) {
+public record ProfileImportResult(String fullName, String email, String location, String professionalSummary,
+        Set<String> rawSkillMentions, List<ExperienceDraft> experiences) {
 
     public record ExperienceDraft(String employer, String title, LocalDate startDate, LocalDate endDate,
             String narrative, Set<String> rawSkillMentions) {

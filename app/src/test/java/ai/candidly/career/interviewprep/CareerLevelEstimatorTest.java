@@ -45,7 +45,7 @@ class CareerLevelEstimatorTest {
     }
 
     private CandidateExperience experience(String title, LocalDate start, LocalDate end) {
-        Candidate candidate = new Candidate("Jane Doe", "jane@example.com", "Remote", Set.of("US"), 0, Set.of());
-        return new CandidateExperience(candidate, "Acme", title, start, end, "narrative", Set.of(), Set.of());
+        Candidate candidate = new Candidate("Jane Doe", "jane@example.com", "Remote", Set.of("US"), 0, Set.of(), Set.of());
+        return new CandidateExperience(candidate, "Acme", title, start, end, "narrative", Set.of(), Set.of(), Set.of());
     }
 }

@@ -3,11 +3,15 @@ package ai.candidly.career.ai;
 import java.util.Comparator;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import ai.candidly.career.config.ProviderProperties;
+import ai.candidly.career.error.ExternalAiServiceException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
@@ -20,6 +24,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  */
 @Component
 public class JinaEmbeddingClient {
+
+    private static final Logger log = LoggerFactory.getLogger(JinaEmbeddingClient.class);
 
     public static final String MODEL_ID = "jina-embeddings-v3";
 
@@ -37,13 +43,20 @@ public class JinaEmbeddingClient {
 
     public List<float[]> embedAll(List<String> texts) {
         EmbeddingRequest request = new EmbeddingRequest(model, texts);
-        EmbeddingResponse response = restClient.post()
-                .uri("/embeddings")
-                .body(request)
-                .retrieve()
-                .body(EmbeddingResponse.class);
+        EmbeddingResponse response;
+        try {
+            response = restClient.post()
+                    .uri("/embeddings")
+                    .body(request)
+                    .retrieve()
+                    .body(EmbeddingResponse.class);
+        } catch (RestClientException e) {
+            log.error("Jina embedding call failed", e);
+            throw new ExternalAiServiceException("Jina", "embedding call failed", e);
+        }
         if (response == null || response.data() == null) {
-            throw new IllegalStateException("Jina returned no embedding data");
+            log.error("Jina returned no embedding data");
+            throw new ExternalAiServiceException("Jina", "returned no embedding data", null);
         }
         return response.data().stream()
                 .sorted(Comparator.comparingInt(EmbeddingData::index))

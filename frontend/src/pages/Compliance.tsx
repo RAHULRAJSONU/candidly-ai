@@ -196,6 +196,22 @@ export function Compliance() {
       )}
 
       <Card>
+        <CardHeader title="Recent compliance activity" subtitle="Erasures, reviews, and screening decisions from the audit ledger" />
+        <div className="max-h-72 space-y-2 overflow-y-auto">
+          {activity.slice(0, 20).map((e) => (
+            <div key={e.id} className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 p-2.5 text-sm">
+              <div>
+                <p className="font-medium text-slate-800">{ACTIVITY_LABEL[e.eventType] ?? e.eventType}</p>
+                <p className="mt-0.5 text-xs text-slate-400">{e.details}</p>
+              </div>
+              <span className="shrink-0 text-xs text-slate-400">{formatRelativeTime(e.occurredAt)}</span>
+            </div>
+          ))}
+          {activity.length === 0 && <p className="text-sm text-slate-400">No compliance-relevant events recorded yet.</p>}
+        </div>
+      </Card>
+
+      <Card>
         <CardHeader
           title="GDPR data-subject actions"
           subtitle={selected ? `For ${selected.fullName}` : 'Select a candidate in the top bar'}

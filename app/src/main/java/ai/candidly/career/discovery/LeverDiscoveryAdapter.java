@@ -1,7 +1,9 @@
 package ai.candidly.career.discovery;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
@@ -54,9 +56,11 @@ public class LeverDiscoveryAdapter implements JobBoardDiscoveryAdapter {
     }
 
     @Override
-    public List<DiscoveredJobPosting> poll() {
+    public List<DiscoveredJobPosting> poll(List<String> additionalTargets) {
         List<DiscoveredJobPosting> postings = new ArrayList<>();
-        for (String companySlug : properties.getCompanySlugs()) {
+        Set<String> companySlugs = new LinkedHashSet<>(properties.getCompanySlugs());
+        companySlugs.addAll(additionalTargets);
+        for (String companySlug : companySlugs) {
             try {
                 postings.addAll(pollCompany(companySlug));
             } catch (HttpStatusCodeException e) {
@@ -98,7 +102,11 @@ public class LeverDiscoveryAdapter implements JobBoardDiscoveryAdapter {
                     posting.text(),
                     location == null ? "" : location,
                     remote,
-                    description));
+                    description,
+                    // Lever's public postings API has no salary field at all for this board
+                    // (confirmed by inspecting the raw response keys) - see
+                    // DiscoveredJobPosting's javadoc.
+                    null, null, null));
         }
         return result;
     }

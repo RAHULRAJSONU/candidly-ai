@@ -27,6 +27,8 @@ import { ResumeDropzone } from '../components/ui/ResumeDropzone'
 import { SkillChipInput } from '../components/ui/SkillChipInput'
 import { Stepper } from '../components/ui/Stepper'
 import { CompanyAvatar } from '../components/ui/CompanyAvatar'
+import { BrandIcon } from '../components/ui/BrandIcon'
+import { currencyOptions, DEFAULT_CURRENCY, formatMoney, toMinorUnits } from '../lib/currency'
 
 type CareerGoal = 'FIND_JOB' | 'EXPLORE' | 'STAY_INFORMED'
 
@@ -79,17 +81,20 @@ export function Onboarding() {
   const [location, setLocation] = useState('')
   const [workAuth, setWorkAuth] = useState('US')
   const [compFloor, setCompFloor] = useState(100000)
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY)
   const [skills, setSkills] = useState('')
   const [experiences, setExperiences] = useState<ExperienceDraft[]>([EMPTY_EXPERIENCE])
   const [linkedInText, setLinkedInText] = useState('')
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [careerGoal, setCareerGoal] = useState<CareerGoal | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
 
-  // Cosmetic only - never uploaded or persisted; there's no avatar-storage endpoint on
-  // this backend. Revoke the object URL on change/unmount to avoid leaking blob memory.
+  // Previewed here via an object URL; the real file is uploaded to
+  // POST /api/candidates/{id}/photo once the candidate record exists (see submit()) -
+  // revoke the object URL on change/unmount to avoid leaking blob memory.
   useEffect(() => {
     return () => {
       if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
@@ -98,6 +103,7 @@ export function Onboarding() {
 
   const pickPhoto = (file: File | undefined) => {
     if (!file) return
+    setPhotoFile(file)
     setPhotoPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev)
       return URL.createObjectURL(file)
@@ -158,7 +164,8 @@ export function Onboarding() {
         email,
         location,
         workAuthorizations: workAuth.split(',').map((s) => s.trim()).filter(Boolean),
-        compFloorMinorUnits: Math.round(compFloor * 100),
+        compFloorMinorUnits: toMinorUnits(compFloor, currency),
+        preferredCurrency: currency,
         rawSkillMentions: skills.split(',').map((s) => s.trim()).filter(Boolean),
         experiences: experiences
           .filter((e) => e.employer.trim() && e.title.trim())
@@ -172,6 +179,14 @@ export function Onboarding() {
             rawSkillMentions: e.skills.split(',').map((s) => s.trim()).filter(Boolean),
           })),
       })
+      if (photoFile) {
+        try {
+          await api.candidates.uploadPhoto(candidate.id, photoFile)
+        } catch {
+          // Non-fatal - the candidate record itself was created fine; they can add a
+          // photo from the Resume & Profile page instead.
+        }
+      }
       refresh()
       setSelectedId(candidate.id)
       navigate('/')
@@ -232,6 +247,7 @@ export function Onboarding() {
           />
           <ImportOption
             icon={Link2}
+            brandIconId="linkedin"
             title="Paste LinkedIn Profile"
             description="Paste your profile URL or exported profile text."
             onClick={() => setStage('import-linkedin')}
@@ -299,7 +315,7 @@ export function Onboarding() {
                 onChange={(e) => pickPhoto(e.target.files?.[0])}
               />
             </div>
-            <p className="text-xs text-slate-400">Add Photo (optional) - shown here only, not saved</p>
+            <p className="text-xs text-slate-400">Add Photo (optional)</p>
           </div>
 
           <div className="space-y-3">
@@ -330,17 +346,28 @@ export function Onboarding() {
             <Field label="Work authorizations (comma-separated)">
               <input value={workAuth} onChange={(e) => setWorkAuth(e.target.value)} className={inputClass} placeholder="US, EU" />
             </Field>
-            <Field label="Minimum acceptable annual compensation (USD)">
-              <div className="relative">
-                <DollarSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-                <input
-                  type="number"
-                  value={compFloor}
-                  onChange={(e) => setCompFloor(Number(e.target.value))}
-                  className={`${inputClass} pl-9`}
-                />
-              </div>
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Currency">
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputClass}>
+                  {currencyOptions(currency).map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={`Minimum acceptable annual compensation (${currency})`}>
+                <div className="relative">
+                  <DollarSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                  <input
+                    type="number"
+                    value={compFloor}
+                    onChange={(e) => setCompFloor(Number(e.target.value))}
+                    className={`${inputClass} pl-9`}
+                  />
+                </div>
+              </Field>
+            </div>
           </div>
         </div>
       )}
@@ -473,7 +500,7 @@ export function Onboarding() {
 
           <ReviewSection title="Work eligibility & compensation" onEdit={() => setStage('about')}>
             <p className="text-sm text-slate-700">Authorized to work in: {workAuth || '(none)'}</p>
-            <p className="text-sm text-slate-700">Minimum comp: ${compFloor.toLocaleString()}</p>
+            <p className="text-sm text-slate-700">Minimum comp: {formatMoney(toMinorUnits(compFloor, currency), currency)}</p>
           </ReviewSection>
 
           <ReviewSection title="Skills" onEdit={() => setStage('skills')}>
@@ -608,12 +635,14 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 function ImportOption({
   icon: Icon,
+  brandIconId,
   title,
   description,
   highlight,
   onClick,
 }: {
   icon: typeof FileText
+  brandIconId?: string
   title: string
   description: string
   highlight?: string
@@ -624,9 +653,13 @@ function ImportOption({
       onClick={onClick}
       className="flex w-full items-center gap-4 rounded-xl border border-slate-200 p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50/30 hover:shadow-md"
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-        <Icon size={20} />
-      </span>
+      {brandIconId ? (
+        <BrandIcon iconId={brandIconId} size={20} boxSize={44} className="rounded-full" />
+      ) : (
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+          <Icon size={20} />
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium text-slate-800">{title}</p>

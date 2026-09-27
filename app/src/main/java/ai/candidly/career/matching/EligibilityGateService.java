@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import ai.candidly.career.domain.Candidate;
+import ai.candidly.career.domain.CurrencyCodes;
 import ai.candidly.career.domain.JobPosting;
 
 /**
@@ -41,8 +42,13 @@ public class EligibilityGateService {
             failureReasons.add("location: job requires " + job.getLocation() + ", candidate is in " + candidate.getLocation());
         }
 
-        boolean compOk = job.getCompMaxMinorUnits() == null
-                || job.getCompMaxMinorUnits() >= candidate.getCompFloorMinorUnits();
+        // Minor units in two different currencies aren't comparable and there's no FX source
+        // to convert them (see CurrencyCodes), so a cross-currency posting is treated like one
+        // that states no comp at all: it can't fail this check. Mirrored in the frontend's
+        // JobDiscovery computeEligibilityChecks - keep the two in sync.
+        boolean compComparable = job.getCompMaxMinorUnits() != null
+                && CurrencyCodes.sameCurrency(job.getCurrency(), candidate.getPreferredCurrency());
+        boolean compOk = !compComparable || job.getCompMaxMinorUnits() >= candidate.getCompFloorMinorUnits();
         if (!compOk) {
             failureReasons.add("compensation: job max below candidate floor");
         }

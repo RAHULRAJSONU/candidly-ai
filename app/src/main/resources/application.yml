@@ -39,7 +39,35 @@ candidly:
     block-threshold: 0.75
   tailoring:
     max-critic-loops: 3
+  extraction:
+    # Kill switch for JobPostingExtractionService's per-discovered-posting TypeSafe call
+    # (mirrors the discovery.*.enabled flags below) - flip off without a redeploy if the
+    # extra billed calls need to stop.
+    enabled: true
+  retrieval:
+    # docs/03 §1 calls k=60 "standard", but exposing it lets it be recalibrated against
+    # real outcomes (docs/03 §3) without a code change.
+    rrf-k: 60
+    retrieval-oversample-factor: 4
+    rerank-oversample-factor: 2
+  matching:
+    weights:
+      # docs/03 §2.1 corrected weights - see CompositeScoringService's javadoc. Exposed
+      # here so they can be recalibrated per docs/03 §3 without a code change; keep them
+      # summing to 1.0.
+      skill: 0.47
+      experience: 0.29
+      semantic: 0.12
+      domain: 0.12
+  autopilot:
+    scheduler-interval-seconds: 300
+    cycle-interval-hours: 12
+    recommendation-pool-size: 15
+    max-new-matches-per-cycle: 5
   discovery:
+    # How often DiscoveryScheduler's automatic poll runs (the manual POST
+    # /api/discovery/poll trigger is unaffected by this).
+    poll-interval-seconds: 3600
     greenhouse:
       # False by default so a fresh checkout doesn't start hitting a live external
       # service on an hourly schedule without an explicit opt-in. GitLab's public board
@@ -48,6 +76,13 @@ candidly:
       enabled: false
       board-tokens:
         - gitlab
+        # Both added after this session's headless-scraping investigation found that
+        # figma.com/careers and about.sourcegraph.com/jobs - sites that look client-side
+        # rendered and un-scrapeable at first glance - are actually just a Greenhouse
+        # widget underneath. Confirmed live against the official public API: figma had
+        # 163 open postings, sourcegraph91 had 8, both with no headless browser needed.
+        - figma
+        - sourcegraph91
       # Each discovered posting costs a screening + embedding call downstream; a real
       # board can list hundreds. Kept small for a demo/dev poll, not a real ingestion run.
       max-postings-per-board: 5
@@ -60,3 +95,43 @@ candidly:
       company-slugs:
         - palantir
       max-postings-per-board: 5
+    ashby:
+      # Same off-by-default rationale as greenhouse.enabled above. Ashby's own careers
+      # page is a real, stable example board with no auth required - see
+      # https://api.ashbyhq.com/posting-api/job-board/ashby (verified live in this repo).
+      enabled: false
+      board-names:
+        - ashby
+      max-postings-per-board: 5
+    workday:
+      # False by default like the others, but empty by necessity too - see
+      # WorkdayDiscoveryAdapter's javadoc: unlike the three above, Workday has no single
+      # guessable global host, so there's no gitlab-style demo default to ship here. Add
+      # a real company's own hostname/tenant/site (from that company's careers URL) to
+      # actually poll something.
+      enabled: false
+      sites: []
+      max-postings-per-site: 5
+    jsonld:
+      # Same off-by-default rationale as the others. Unlike Greenhouse/Lever/Ashby, this
+      # adapter has no single fixed global host - each entry here is a full career-page
+      # URL on a different company's own domain. The one verified-live example found
+      # during this implementation is an individual Ashby-*hosted* job page (Ashby's own
+      # board *listing* page, and every other career site tried, are client-side rendered
+      # and embed no static JobPosting JSON-LD at all - see the adapter's javadoc for the
+      # full accounting).
+      enabled: false
+      career-page-urls:
+        - https://jobs.ashbyhq.com/ramp/34413f8d-26bf-4bbc-8ade-eb309a0e2245
+      max-postings-per-page: 5
+    headless:
+      # Off by default like the others - and never linkedin.com, enforced in code
+      # (HeadlessCareerPageDiscoveryAdapter rejects it before launching a browser), not just
+      # left out of this list. Each portal is one company's own career-listing page; requires
+      # Playwright's Chromium binary to be installed once (`mvn -o exec:java
+      # -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"` or the
+      # equivalent `playwright install chromium` - see CLAUDE.md).
+      enabled: false
+      portals: []
+      max-postings-per-portal: 10
+      navigation-timeout-millis: 30000

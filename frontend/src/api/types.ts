@@ -14,6 +14,8 @@ export interface CandidateRequest {
   location: string
   workAuthorizations: string[]
   compFloorMinorUnits: number
+  /** ISO 4217 code compFloorMinorUnits is in; omitted reads as USD. */
+  preferredCurrency?: string
   rawSkillMentions: string[]
   experiences: CandidateExperienceInput[]
 }
@@ -27,6 +29,83 @@ export interface Candidate {
   compFloorMinorUnits: number
   skillIds: string[]
   rawSkillMentions: string[]
+  phone: string | null
+  linkedinUrl: string | null
+  portfolioUrl: string | null
+  headline: string | null
+  professionalSummary: string | null
+  workMode: string | null
+  noticePeriod: string | null
+  openToRelocation: boolean
+  expectedCompMinMinorUnits: number | null
+  expectedCompMaxMinorUnits: number | null
+  /** The candidate's currency preference: every candidate-owned amount (compFloorMinorUnits,
+   * expectedComp*, Autopilot salary) is in this currency - see lib/currency.ts. */
+  preferredCurrency: string
+  preferredLocations: string[]
+  preferredRoles: string[]
+  preferredIndustries: string[]
+  employmentTypes: string[]
+}
+
+/** Partial update for the Resume & Profile page - see backend CandidateProfileUpdateRequest. Every field optional; omit to leave unchanged. */
+export type CandidateProfileUpdate = Partial<{
+  fullName: string
+  location: string
+  workAuthorizations: string[]
+  phone: string
+  linkedinUrl: string
+  portfolioUrl: string
+  headline: string
+  professionalSummary: string
+  workMode: string
+  noticePeriod: string
+  openToRelocation: boolean
+  expectedCompMinMinorUnits: number
+  expectedCompMaxMinorUnits: number
+  compFloorMinorUnits: number
+  preferredCurrency: string
+  preferredLocations: string[]
+  preferredRoles: string[]
+  preferredIndustries: string[]
+  employmentTypes: string[]
+  rawSkillMentions: string[]
+}>
+
+/** Backend: CandidateSettings - the Settings page's AI Preferences/Notifications/Appearance/Billing cards. */
+export interface CandidateSettings {
+  id: string
+  candidateId: string
+  preferredAiModel: string
+  responseStyle: 'CONCISE' | 'BALANCED' | 'DETAILED'
+  levelOfDetail: 'BRIEF' | 'STANDARD' | 'COMPREHENSIVE'
+  personalizedRecommendations: boolean
+  aiResumeTailoring: boolean
+  aiCoverLetterGeneration: boolean
+  aiInterviewPrep: boolean
+  useDataForModelImprovement: boolean
+  notifyJobMatches: boolean
+  notifyApplicationUpdates: boolean
+  notifyInterviewReminders: boolean
+  notifyWeeklyDigest: boolean
+  notifyProductUpdates: boolean
+  theme: 'LIGHT' | 'DARK' | 'SYSTEM'
+  planTier: string
+}
+
+export type CandidateSettingsUpdate = Partial<Omit<CandidateSettings, 'id' | 'candidateId'>>
+
+export interface ResumeMeta {
+  filename: string
+  contentType: string
+  sizeBytes: number
+  uploadedAt: string
+}
+
+export interface PhotoMeta {
+  contentType: string
+  sizeBytes: number
+  uploadedAt: string
 }
 
 // --- Resume / LinkedIn profile import (onboarding pre-fill) ---
@@ -44,11 +123,14 @@ export interface ProfileImportResult {
   fullName: string | null
   email: string | null
   location: string | null
+  professionalSummary: string | null
   rawSkillMentions: string[]
   experiences: ProfileImportExperienceDraft[]
 }
 
 export type ScreeningDecision = 'PASS' | 'REVIEW' | 'BLOCK'
+
+export type JobPostingSource = 'GREENHOUSE' | 'LEVER' | 'ASHBY' | 'WORKDAY' | 'JSONLD' | 'MANUAL'
 
 export interface JobPosting {
   id: string
@@ -59,6 +141,8 @@ export interface JobPosting {
   remote: boolean
   compMinMinorUnits: number | null
   compMaxMinorUnits: number | null
+  /** The posting's own ISO 4217 code for compMin/MaxMinorUnits - not the candidate's preference, never converted. */
+  currency: string
   acceptedWorkAuthorizations: string[]
   mandatorySkillIds: string[]
   preferredSkillIds: string[]
@@ -67,6 +151,8 @@ export interface JobPosting {
   rawDescription: string
   screeningDecision: ScreeningDecision
   screeningReasons: string
+  source: JobPostingSource
+  discoveredAt: string | null
 }
 
 export interface MatchScorecard {
@@ -180,6 +266,15 @@ export interface DiscoveryRunResult {
   ingested: number
 }
 
+/** Real per-adapter status - only boards this app actually has an adapter for (Greenhouse, Lever). */
+export interface DiscoverySourceStatus {
+  name: string
+  enabled: boolean
+  lastPolledAt: string | null
+  lastDiscovered: number
+  lastIngested: number
+}
+
 export interface ConsistencyStat {
   mean: number
   stddev: number
@@ -233,12 +328,39 @@ export interface CandidateExperience {
   rawSkillMentions: string[]
 }
 
+export interface Project {
+  id: string
+  title: string
+  description: string | null
+  url: string | null
+  startDate: string | null
+  endDate: string | null
+  technologies: string[]
+}
+
+export type SkillProficiencyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'EXPERT'
+
+/** Candidate self-reported detail for one skill on `Candidate.rawSkillMentions`, keyed by
+ * exact skill name (case-insensitive) - see backend CandidateSkillProfile. Any field may
+ * be null when the candidate hasn't filled it in yet. */
+export interface SkillProfile {
+  id: string
+  skillName: string
+  proficiencyLevel: SkillProficiencyLevel | null
+  yearsOfExperience: number | null
+  confidenceScore: number | null
+  lastUsedOn: string | null
+  lastUsedVersion: string | null
+}
+
 export interface CareerVaultView {
   candidate: Candidate
   experiences: CandidateExperience[]
   achievements: Achievement[]
   education: Education[]
   certifications: Certification[]
+  projects: Project[]
+  skillProfiles: SkillProfile[]
   completeness: number
 }
 
@@ -303,30 +425,36 @@ export interface PipelineOffer {
   candidate: Candidate
   jobPosting: JobPosting
   compensationMinorUnits: number | null
+  /** Captured when the offer was recorded, so a later currency-preference change doesn't relabel it. */
+  currency: string
   status: OfferStatus
   notes: string | null
   receivedAt: string
 }
 
 export interface PipelineSummary {
+  /** Global counts (shared across all candidates, not candidate-scoped) - see PipelineSummaryService. */
+  discovered: number
+  filtered: number
   matched: number
   shortlisted: number
   tailoring: number
   pendingApproval: number
   approved: number
+  rejected: number
   interviews: number
   offers: number
 }
 
 // --- Autopilot ("AI Job Application Agent") ---
 //
-// Deliberately, explicitly built despite docs/00/docs/02's original HITL-by-default
-// guarantee - built at the user's direction after being shown that tradeoff. "Apply"
-// still never fires an outbound submission at a real third-party ATS; see the backend
-// AutopilotService javadoc for the full scoping note. A high-priority match (composite
-// score >= highPriorityReviewThreshold) still lands in the ordinary Applications review
-// queue instead of auto-approving, matching the mock's own "review for high-priority
-// roles" copy.
+// Discovers, scores and tailors applications on a schedule with no manual step, but never
+// submits one past this app's existing human-in-the-loop gate - docs/00/docs/02's
+// no-auto-submission/HITL-by-default guarantee is a load-bearing compliance property, not
+// a default this feature relaxes. "Auto Apply" means the agent auto-generates tailored
+// artifacts and queues them in the candidate's ordinary Applications review queue; only a
+// human approving there (or on console.html) ever moves one to APPROVED. See the backend
+// AutopilotService javadoc for the full scoping note.
 
 export type AutopilotRunStatus = 'STOPPED' | 'RUNNING' | 'PAUSED'
 
@@ -353,6 +481,8 @@ export interface AutopilotSettings {
   includeKeywords: string[]
   excludeKeywords: string[]
   enabledJobSources: string[]
+  /** Namespaced e.g. "greenhouse:notion", "lever:ramp" - see AutopilotSettings backend javadoc. */
+  trackedCompanySlugs: string[]
   autoApply: boolean
   aiTailorResume: boolean
   generateCoverLetter: boolean
@@ -361,7 +491,6 @@ export interface AutopilotSettings {
   notifyBeforeApplying: boolean
   autoFollowUp: boolean
   dailyApplicationLimit: number
-  highPriorityReviewThreshold: number
   notifyNewMatches: boolean
   notifyApplicationSubmitted: boolean
   notifyStatusChanges: boolean
@@ -385,6 +514,7 @@ export type AutopilotSettingsUpdate = Partial<
     | 'includeKeywords'
     | 'excludeKeywords'
     | 'enabledJobSources'
+    | 'trackedCompanySlugs'
     | 'autoApply'
     | 'aiTailorResume'
     | 'generateCoverLetter'
@@ -413,6 +543,108 @@ export interface AutopilotStats {
 export interface AutopilotStatusView {
   settings: AutopilotSettings
   stats: AutopilotStats
+}
+
+// Live pipeline feed (GET /api/audit/pipeline-feed) - backs the AI Ops animated stage
+// rail. Polled every few seconds; no WebSocket/SSE in this app.
+export type PipelineActivityStage =
+  | "DISCOVERED"
+  | "SCREENED"
+  | "EXTRACTED"
+  | "EMBEDDED"
+  | "SCORED"
+  | "SHORTLISTED"
+  | "TAILORING"
+  | "APPROVED"
+  | "REJECTED"
+
+export interface PipelineActivityItem {
+  id: string
+  eventType: string
+  stage: PipelineActivityStage
+  occurredAt: string
+  jobPostingId: string | null
+  jobTitle: string | null
+  company: string | null
+  candidateId: string | null
+  detail: string
+}
+
+// Dynamically derived from the candidate's own Career Vault data (experience/achievements/
+// skills) via real TypeSafe judgments - see backend ProfilePositioningService. Advisory
+// only: applying a suggestion means copying it into the Autopilot settings form fields
+// above, never an automatic write.
+export interface ProfilePositioningTitleSuggestion {
+  title: string
+  confidence: number
+}
+
+export interface ProfilePositioning {
+  hasEnoughData: boolean
+  suggestedSeniority: string | null
+  seniorityConfidence: number
+  suggestedTitles: ProfilePositioningTitleSuggestion[]
+  suggestedKeywords: string[]
+  rationale: string
+}
+
+// --- AI Ops (real aggregated numbers - see backend AiOpsSummary's javadoc for why this
+// isn't a multi-model comparison like the "AI/Model Evaluation" mock depicts) ---
+
+export interface AiOpsSummary {
+  totalArtifactsGenerated: number
+  groundingPassRate: number
+  avgCriticLoopsUsed: number
+  avgRejectedClaimsPerArtifact: number
+  totalMatchesScored: number
+  avgCompositeScore: number
+  screeningDecisionCounts: Record<string, number>
+  artifactStatusCounts: Record<string, number>
+}
+
+// --- Autopilot Insights (explainable source/domain/skill -> approval/interview
+// correlation, plan Phase 3 - see backend InsightsService's javadoc. Rates are `null`
+// when the denominator is 0: "no data yet", not "0%".) ---
+
+export interface SourceInsight {
+  source: JobPostingSource
+  discovered: number
+  shortlisted: number
+  tailored: number
+  approved: number
+  rejected: number
+  interviews: number
+  offers: number
+  approvalRate: number | null
+  interviewRate: number | null
+}
+
+export interface DomainInsight {
+  domain: string
+  discovered: number
+  shortlisted: number
+  approved: number
+  rejected: number
+  interviews: number
+  shortlistRate: number | null
+  approvalRate: number | null
+}
+
+export interface SkillInsight {
+  skillId: string
+  skillLabel: string
+  postingsRequiring: number
+  shortlisted: number
+  approved: number
+  rejected: number
+  shortlistRate: number | null
+  approvalRate: number | null
+}
+
+export interface InsightsSummary {
+  bySource: SourceInsight[]
+  byDomain: DomainInsight[]
+  byMandatorySkill: SkillInsight[]
 }
 
 // --- AI config (read-only, Settings "AI Preferences" tab) ---
@@ -463,9 +695,18 @@ export interface EmailIntakeResult {
   createdInterviewId: string | null
   recordId: string
   draftReplyText: string | null
+  scamRisk: boolean
+  scamRiskProbability: number
 }
 
-export type EmailReviewStatus = 'NO_REPLY_NEEDED' | 'NEEDS_REVIEW' | 'APPROVED_SEND' | 'EDITED_SEND' | 'SCHEDULED' | 'CANCELLED'
+export type EmailReviewStatus =
+  | 'NO_REPLY_NEEDED'
+  | 'NEEDS_REVIEW'
+  | 'APPROVED_SEND'
+  | 'EDITED_SEND'
+  | 'SCHEDULED'
+  | 'CANCELLED'
+  | 'ALTERNATIVE_SUGGESTED'
 
 export interface EmailIntakeRecord {
   id: string

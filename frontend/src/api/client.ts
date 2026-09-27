@@ -1,6 +1,7 @@
 import type {
   Achievement,
   AiConfigView,
+  AiOpsSummary,
   AnswerFeedback,
   ArtifactReviewView,
   AtsScoreResult,
@@ -9,18 +10,25 @@ import type {
   AutopilotSettings,
   AutopilotSettingsUpdate,
   AutopilotStatusView,
+  ProfilePositioning,
   BiasAuditReport,
   Candidate,
   CandidateDemographics,
+  CandidateExperience,
+  CandidateProfileUpdate,
   CandidateRequest,
+  CandidateSettings,
+  CandidateSettingsUpdate,
   CareerLevel,
   CareerVaultView,
   Certification,
   ConsistencyReport,
   DiscoveryRunResult,
+  DiscoverySourceStatus,
   Education,
   EmailIntakeRecord,
   EmailIntakeResult,
+  InsightsSummary,
   ManualApplication,
   ManualApplicationStatus,
   InterviewCategory,
@@ -29,12 +37,18 @@ import type {
   JobPosting,
   MatchScorecard,
   OfferStatus,
+  PhotoMeta,
+  PipelineActivityItem,
   PipelineInterview,
   PipelineInterviewMode,
   PipelineInterviewStatus,
   PipelineOffer,
   PipelineSummary,
   ProfileImportResult,
+  Project,
+  ResumeMeta,
+  SkillProfile,
+  SkillProficiencyLevel,
   TailoringJob,
 } from './types'
 
@@ -83,12 +97,35 @@ export const api = {
   aiConfig: {
     get: () => request<AiConfigView>('/config/ai'),
   },
+  aiOps: {
+    summary: () => request<AiOpsSummary>('/ai-ops/summary'),
+    insights: () => request<InsightsSummary>('/ai-ops/insights'),
+  },
   candidates: {
     list: () => request<Candidate[]>('/candidates'),
     create: (body: CandidateRequest) => request<Candidate>('/candidates', { method: 'POST', body: JSON.stringify(body) }),
     get: (id: string) => request<Candidate>(`/candidates/${id}`),
+    update: (id: string, body: CandidateProfileUpdate) =>
+      request<Candidate>(`/candidates/${id}/profile`, { method: 'PUT', body: JSON.stringify(body) }),
     erase: (id: string) => request<void>(`/candidates/${id}`, { method: 'DELETE' }),
     export: (id: string) => request<unknown>(`/candidates/${id}/export`),
+    uploadResume: (id: string, file: File) => {
+      const formData = new FormData()
+      formData.set('file', file)
+      return requestMultipart<ResumeMeta>(`/candidates/${id}/resume`, formData)
+    },
+    resumeMeta: (id: string) => request<ResumeMeta>(`/candidates/${id}/resume/meta`),
+    resumeDownloadUrl: (id: string) => `/api/candidates/${id}/resume`,
+    resumePreviewUrl: (id: string) => `/api/candidates/${id}/resume?disposition=inline`,
+    deleteResume: (id: string) => request<void>(`/candidates/${id}/resume`, { method: 'DELETE' }),
+    uploadPhoto: (id: string, file: File | Blob) => {
+      const formData = new FormData()
+      formData.set('file', file, 'photo.png')
+      return requestMultipart<PhotoMeta>(`/candidates/${id}/photo`, formData)
+    },
+    photoMeta: (id: string) => request<PhotoMeta>(`/candidates/${id}/photo/meta`),
+    photoUrl: (id: string) => `/api/candidates/${id}/photo`,
+    deletePhoto: (id: string) => request<void>(`/candidates/${id}/photo`, { method: 'DELETE' }),
     importResume: (file: File) => {
       const formData = new FormData()
       formData.set('file', file)
@@ -99,6 +136,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ text }),
       }),
+  },
+  settings: {
+    get: (candidateId: string) => request<CandidateSettings>(`/candidates/${candidateId}/settings`),
+    update: (candidateId: string, body: CandidateSettingsUpdate) =>
+      request<CandidateSettings>(`/candidates/${candidateId}/settings`, { method: 'PUT', body: JSON.stringify(body) }),
   },
   demographics: {
     get: (candidateId: string) => request<CandidateDemographics>(`/candidates/${candidateId}/demographics`),
@@ -111,6 +153,7 @@ export const api = {
   jobPostings: {
     list: () => request<JobPosting[]>('/job-postings'),
     get: (id: string) => request<JobPosting>(`/job-postings/${id}`),
+    similar: (id: string) => request<JobPosting[]>(`/job-postings/${id}/similar`),
   },
   matches: {
     listForCandidate: (candidateId: string) => request<MatchScorecard[]>(`/matches?candidateId=${candidateId}`),
@@ -141,6 +184,7 @@ export const api = {
   },
   discovery: {
     poll: () => request<DiscoveryRunResult>('/discovery/poll', { method: 'POST' }),
+    sources: () => request<DiscoverySourceStatus[]>('/discovery/sources'),
   },
   audit: {
     events: () => request<AuditEvent[]>('/audit/events'),
@@ -149,6 +193,7 @@ export const api = {
     biasReport: () => request<BiasAuditReport>('/audit/bias-report'),
     purge: (olderThanDays: number) =>
       request<{ purged: number }>(`/audit/retention/purge?olderThanDays=${olderThanDays}`, { method: 'POST' }),
+    pipelineFeed: (limit = 50) => request<PipelineActivityItem[]>(`/audit/pipeline-feed?limit=${limit}`),
   },
   calibration: {
     consistency: (candidateId: string, jobPostingId: string, runs: number) =>
@@ -159,6 +204,20 @@ export const api = {
   },
   vault: {
     get: (candidateId: string) => request<CareerVaultView>(`/candidates/${candidateId}/vault`),
+    addExperience: (
+      candidateId: string,
+      body: {
+        employer: string
+        title: string
+        startDate?: string
+        endDate?: string
+        narrative?: string
+        verifiedMetrics?: string[]
+        rawSkillMentions?: string[]
+      },
+    ) => request<CandidateExperience>(`/candidates/${candidateId}/vault/experiences`, { method: 'POST', body: JSON.stringify(body) }),
+    deleteExperience: (candidateId: string, experienceId: string) =>
+      request<void>(`/candidates/${candidateId}/vault/experiences/${experienceId}`, { method: 'DELETE' }),
     addAchievement: (candidateId: string, body: { title: string; description?: string; occurredOn?: string; tags?: string[] }) =>
       request<Achievement>(`/candidates/${candidateId}/vault/achievements`, { method: 'POST', body: JSON.stringify(body) }),
     addEducation: (
@@ -167,6 +226,21 @@ export const api = {
     ) => request<Education>(`/candidates/${candidateId}/vault/education`, { method: 'POST', body: JSON.stringify(body) }),
     addCertification: (candidateId: string, body: { name: string; issuer: string; issuedOn?: string; credentialId?: string }) =>
       request<Certification>(`/candidates/${candidateId}/vault/certifications`, { method: 'POST', body: JSON.stringify(body) }),
+    addProject: (
+      candidateId: string,
+      body: { title: string; description?: string; url?: string; startDate?: string; endDate?: string; technologies?: string[] },
+    ) => request<Project>(`/candidates/${candidateId}/vault/projects`, { method: 'POST', body: JSON.stringify(body) }),
+    upsertSkillProfile: (
+      candidateId: string,
+      body: {
+        skillName: string
+        proficiencyLevel?: SkillProficiencyLevel | null
+        yearsOfExperience?: number | null
+        confidenceScore?: number | null
+        lastUsedOn?: string | null
+        lastUsedVersion?: string | null
+      },
+    ) => request<SkillProfile>(`/candidates/${candidateId}/vault/skills`, { method: 'PUT', body: JSON.stringify(body) }),
   },
   interviewPrep: {
     questions: (opts: {
@@ -214,7 +288,7 @@ export const api = {
         body: JSON.stringify({ status }),
       }),
     offers: (candidateId: string) => request<PipelineOffer[]>(`/candidates/${candidateId}/offers`),
-    recordOffer: (candidateId: string, body: { jobPostingId: string; compensationMinorUnits?: number; notes?: string }) =>
+    recordOffer: (candidateId: string, body: { jobPostingId: string; compensationMinorUnits?: number; currency?: string; notes?: string }) =>
       request<PipelineOffer>(`/candidates/${candidateId}/offers`, { method: 'POST', body: JSON.stringify(body) }),
     updateOfferStatus: (candidateId: string, offerId: string, status: OfferStatus) =>
       request<PipelineOffer>(`/candidates/${candidateId}/offers/${offerId}/status`, {
@@ -243,6 +317,13 @@ export const api = {
       }),
     history: (candidateId: string) => request<EmailIntakeRecord[]>(`/candidates/${candidateId}/email-intake/history`),
     needsReview: (candidateId: string) => request<EmailIntakeRecord[]>(`/candidates/${candidateId}/email-intake/needs-review`),
+    thread: (candidateId: string, jobPostingId: string) =>
+      request<EmailIntakeRecord[]>(`/candidates/${candidateId}/email-intake/thread?jobPostingId=${jobPostingId}`),
+    suggestAlternative: (candidateId: string, recordId: string, alternativeText: string, note = '') =>
+      request<EmailIntakeRecord>(`/candidates/${candidateId}/email-intake/${recordId}/suggest-alternative`, {
+        method: 'POST',
+        body: JSON.stringify({ alternativeText, note }),
+      }),
     approveSend: (candidateId: string, recordId: string, note = '') =>
       request<EmailIntakeRecord>(`/candidates/${candidateId}/email-intake/${recordId}/approve-send`, {
         method: 'POST',
@@ -278,5 +359,8 @@ export const api = {
     runNow: (candidateId: string) => request<AutopilotSettings>(`/candidates/${candidateId}/autopilot/run-now`, { method: 'POST' }),
     activity: (candidateId: string, limit = 50) =>
       request<AuditEvent[]>(`/candidates/${candidateId}/autopilot/activity?limit=${limit}`),
+  },
+  profilePositioning: {
+    get: (candidateId: string) => request<ProfilePositioning>(`/candidates/${candidateId}/profile-positioning`),
   },
 }

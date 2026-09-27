@@ -9,18 +9,22 @@ import {
   Radar,
   Bot,
   Pause,
+  Compass,
+  Wand2,
 } from "lucide-react";
 import { api } from "../api/client";
 import type {
   AutopilotSettings as AutopilotSettingsType,
   AutopilotStatusView,
+  ProfilePositioning,
 } from "../api/types";
 import { useCandidate } from "../context/CandidateContext";
 import { Card, CardHeader } from "../components/ui/Card";
-import { Badge } from "../components/ui/Badge";
+import { Badge, toneForScore } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { SkillChipInput } from "../components/ui/SkillChipInput";
 import { StatCard } from "../components/ui/StatCard";
+import { currencySymbol, fromMinorUnits, toMinorUnits, DEFAULT_CURRENCY } from "../lib/currency";
 
 const JOB_SOURCES = [
   "GREENHOUSE",
@@ -44,7 +48,7 @@ const INTRO_STEPS = [
     detail: "Score fit against your profile",
     icon: Sparkles,
   },
-  { label: "Apply", detail: "Tailor & submit (per your settings)", icon: Send },
+  { label: "Apply", detail: "Tailor & queue for your review", icon: Send },
   { label: "Track", detail: "You stay informed", icon: Radar },
 ];
 
@@ -67,6 +71,10 @@ export function AutopilotSettingsPage() {
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [positioning, setPositioning] = useState<ProfilePositioning | null>(
+    null,
+  );
+  const [positioningLoading, setPositioningLoading] = useState(false);
 
   // Chip-input fields are edited as comma-joined strings locally, same idiom as Onboarding.tsx
   const [roles, setRoles] = useState("");
@@ -74,6 +82,8 @@ export function AutopilotSettingsPage() {
   const [keySkills, setKeySkills] = useState("");
   const [includeKeywords, setIncludeKeywords] = useState("");
   const [excludeKeywords, setExcludeKeywords] = useState("");
+  const [trackedGreenhouseBoards, setTrackedGreenhouseBoards] = useState("");
+  const [trackedLeverCompanies, setTrackedLeverCompanies] = useState("");
 
   useEffect(() => {
     if (!selected) return;
@@ -84,6 +94,20 @@ export function AutopilotSettingsPage() {
       setKeySkills(toChipString(s.keySkills));
       setIncludeKeywords(toChipString(s.includeKeywords));
       setExcludeKeywords(toChipString(s.excludeKeywords));
+      setTrackedGreenhouseBoards(
+        toChipString(
+          s.trackedCompanySlugs
+            .filter((slug) => slug.startsWith("greenhouse:"))
+            .map((slug) => slug.slice("greenhouse:".length)),
+        ),
+      );
+      setTrackedLeverCompanies(
+        toChipString(
+          s.trackedCompanySlugs
+            .filter((slug) => slug.startsWith("lever:"))
+            .map((slug) => slug.slice("lever:".length)),
+        ),
+      );
     });
   }, [selected]);
 
@@ -91,6 +115,17 @@ export function AutopilotSettingsPage() {
   useEffect(() => {
     if (!selected) return;
     api.autopilot.status(selected.id).then(setStatusView);
+  }, [selected]);
+
+  // Right-rail "Suggested Positioning" card - dynamically re-derived from the candidate's
+  // Career Vault each time they land on this page (see backend ProfilePositioningService).
+  useEffect(() => {
+    if (!selected) return;
+    setPositioningLoading(true);
+    api.profilePositioning
+      .get(selected.id)
+      .then(setPositioning)
+      .finally(() => setPositioningLoading(false));
   }, [selected]);
 
   useEffect(() => {
@@ -118,11 +153,27 @@ export function AutopilotSettingsPage() {
     );
   }
 
+  const currency = selected.preferredCurrency || DEFAULT_CURRENCY;
+
   const update = <K extends keyof AutopilotSettingsType>(
     key: K,
     value: AutopilotSettingsType[K],
   ) => {
     setSettings({ ...settings, [key]: value });
+    setSaved(false);
+  };
+
+  const applyPositioning = () => {
+    if (!positioning) return;
+    const suggestedRoles = positioning.suggestedTitles.map((t) => t.title);
+    const mergedRoles = Array.from(
+      new Set([...fromChipString(roles), ...suggestedRoles]),
+    );
+    setRoles(toChipString(mergedRoles));
+    const mergedSkills = Array.from(
+      new Set([...fromChipString(keySkills), ...positioning.suggestedKeywords]),
+    );
+    setKeySkills(toChipString(mergedSkills));
     setSaved(false);
   };
 
@@ -150,6 +201,10 @@ export function AutopilotSettingsPage() {
         includeKeywords: fromChipString(includeKeywords),
         excludeKeywords: fromChipString(excludeKeywords),
         enabledJobSources: settings.enabledJobSources,
+        trackedCompanySlugs: [
+          ...fromChipString(trackedGreenhouseBoards).map((s) => `greenhouse:${s}`),
+          ...fromChipString(trackedLeverCompanies).map((s) => `lever:${s}`),
+        ],
         autoApply: settings.autoApply,
         aiTailorResume: settings.aiTailorResume,
         generateCoverLetter: settings.generateCoverLetter,
@@ -263,36 +318,36 @@ export function AutopilotSettingsPage() {
                   options={["FULL_TIME", "CONTRACT", "INTERNSHIP", "PART_TIME"]}
                 />
               </Field>
-              <Field label="Minimum Salary (annual, $)">
+              <Field label={`Minimum Salary (annual, ${currencySymbol(currency)})`}>
                 <input
                   type="number"
                   className={inputClass}
                   value={
                     settings.salaryMinMinorUnits
-                      ? settings.salaryMinMinorUnits / 100
+                      ? fromMinorUnits(settings.salaryMinMinorUnits, currency)
                       : ""
                   }
                   onChange={(e) =>
                     update(
                       "salaryMinMinorUnits",
-                      e.target.value ? Number(e.target.value) * 100 : null,
+                      e.target.value ? toMinorUnits(Number(e.target.value), currency) : null,
                     )
                   }
                 />
               </Field>
-              <Field label="Maximum Salary (annual, $)">
+              <Field label={`Maximum Salary (annual, ${currencySymbol(currency)})`}>
                 <input
                   type="number"
                   className={inputClass}
                   value={
                     settings.salaryMaxMinorUnits
-                      ? settings.salaryMaxMinorUnits / 100
+                      ? fromMinorUnits(settings.salaryMaxMinorUnits, currency)
                       : ""
                   }
                   onChange={(e) =>
                     update(
                       "salaryMaxMinorUnits",
-                      e.target.value ? Number(e.target.value) * 100 : null,
+                      e.target.value ? toMinorUnits(Number(e.target.value), currency) : null,
                     )
                   }
                 />
@@ -373,13 +428,35 @@ export function AutopilotSettingsPage() {
               polls (see docs/04 FR-1); the rest are placeholders matching the
               mock's source list.
             </p>
+            <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
+              <Field
+                label="Tracked Greenhouse boards"
+                hint="Board tokens from a company's careers URL (e.g. gitlab). Discovery polls these alongside the app's default boards whenever this agent is running."
+              >
+                <SkillChipInput
+                  value={trackedGreenhouseBoards}
+                  onChange={setTrackedGreenhouseBoards}
+                  placeholder="e.g. gitlab, notion - press Enter"
+                />
+              </Field>
+              <Field
+                label="Tracked Lever companies"
+                hint="Company slugs from a Lever careers URL (e.g. palantir)."
+              >
+                <SkillChipInput
+                  value={trackedLeverCompanies}
+                  onChange={setTrackedLeverCompanies}
+                  placeholder="e.g. palantir, ramp - press Enter"
+                />
+              </Field>
+            </div>
           </Card>
 
           <Card>
             <CardHeader title="Application Settings" />
             <div className="space-y-3">
               <Checkbox
-                label="Auto-apply to best matches"
+                label="Auto-tailor and queue best matches for review"
                 checked={settings.autoApply}
                 onChange={(v) => update("autoApply", v)}
               />
@@ -459,6 +536,80 @@ export function AutopilotSettingsPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader
+              title="Suggested Positioning"
+              subtitle="Dynamically derived from your Career Vault"
+              action={<Compass size={16} className="text-slate-400" />}
+            />
+            {positioningLoading && !positioning ? (
+              <p className="text-sm text-slate-400">
+                Reasoning about your profile...
+              </p>
+            ) : !positioning || !positioning.hasEnoughData ? (
+              <p className="text-sm text-slate-500">
+                {positioning?.rationale ??
+                  "Add experience, achievements, or skills to your Career Vault to get positioning suggestions."}
+              </p>
+            ) : (
+              <>
+                {positioning.suggestedSeniority && (
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="text-xs font-medium text-slate-500">
+                      Seniority read:
+                    </span>
+                    <Badge tone={toneForScore(positioning.seniorityConfidence)}>
+                      {positioning.suggestedSeniority}
+                    </Badge>
+                  </div>
+                )}
+                {positioning.suggestedTitles.length > 0 && (
+                  <div className="mb-3">
+                    <p className="mb-1.5 text-xs font-medium text-slate-500">
+                      Target titles
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {positioning.suggestedTitles.map((t) => (
+                        <Badge key={t.title} tone={toneForScore(t.confidence)}>
+                          {t.title}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {positioning.suggestedKeywords.length > 0 && (
+                  <div className="mb-3">
+                    <p className="mb-1.5 text-xs font-medium text-slate-500">
+                      Keywords, from your skills
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {positioning.suggestedKeywords.map((k) => (
+                        <Badge key={k} tone="slate">
+                          {k}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="mb-3 text-xs leading-relaxed text-slate-500">
+                  {positioning.rationale}
+                </p>
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  icon={<Wand2 size={14} />}
+                  onClick={applyPositioning}
+                  disabled={
+                    positioning.suggestedTitles.length === 0 &&
+                    positioning.suggestedKeywords.length === 0
+                  }
+                >
+                  Apply to Job Preferences
+                </Button>
+              </>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader
               title="Agent Status"
               action={
                 statusView && (
@@ -497,7 +648,7 @@ export function AutopilotSettingsPage() {
                     icon={<Send size={16} />}
                     iconTone="green"
                     value={statusView.stats.applicationsSubmittedToday}
-                    label="Applied Today"
+                    label="Queued Today"
                   />
                   <StatCard
                     icon={<Sparkles size={16} />}

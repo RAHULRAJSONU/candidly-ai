@@ -28,7 +28,7 @@ public class AutopilotScheduler {
         this.autopilotService = autopilotService;
     }
 
-    @Scheduled(fixedRate = 300_000, initialDelay = 60_000)
+    @Scheduled(fixedRateString = "${candidly.autopilot.scheduler-interval-seconds:300}000", initialDelay = 60_000)
     public void pollScheduled() {
         List<AutopilotSettings> running = settingsRepository.findByStatus(AutopilotStatus.RUNNING);
         Instant now = Instant.now();

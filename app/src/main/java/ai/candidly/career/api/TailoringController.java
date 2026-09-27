@@ -70,7 +70,12 @@ public class TailoringController {
             throw new ResponseStatusException(HttpStatusCode.valueOf(409), "Candidate is not shortlisted for this job");
         }
 
-        TailoringJob job2 = tailoringJobService.submit(candidate, job);
+        TailoringJob job2;
+        try {
+            job2 = tailoringJobService.submit(candidate, job);
+        } catch (ai.candidly.career.settings.CandidateSettingsService.AiFeatureDisabledException e) {
+            throw new ResponseStatusException(HttpStatusCode.valueOf(409), e.getMessage());
+        }
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(job2);
     }
 

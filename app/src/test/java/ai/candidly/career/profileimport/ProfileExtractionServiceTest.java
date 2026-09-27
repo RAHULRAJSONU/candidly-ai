@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,8 @@ class ProfileExtractionServiceTest {
 
     @Mock
     private GroqChatClient groqChatClient;
+    @Mock
+    private EmailExtractionService emailExtractionService;
 
     @Test
     void parsesFixedDelimitedFormatIntoStructuredDraft() {
@@ -25,6 +28,7 @@ class ProfileExtractionServiceTest {
                 FULL_NAME: Jane Doe
                 EMAIL: jane.doe@example.com
                 LOCATION: Austin, TX
+                SUMMARY: Senior Engineer with experience leading backend platform teams and building distributed systems.
                 SKILLS: Java, Spring Boot, AWS
                 EXPERIENCE_START
                 EMPLOYER: Acme Corp
@@ -41,12 +45,15 @@ class ProfileExtractionServiceTest {
                 NARRATIVE: Built internal tools.
                 EXPERIENCE_END""";
         when(groqChatClient.complete(any(), any())).thenReturn(completion);
+        when(emailExtractionService.extractOwnEmail(any())).thenReturn(Optional.of("jane.doe@example.com"));
 
-        var result = new ProfileExtractionService(groqChatClient).extractFromResume("some resume text");
+        var result = new ProfileExtractionService(groqChatClient, emailExtractionService).extractFromResume("some resume text");
 
         assertThat(result.fullName()).isEqualTo("Jane Doe");
         assertThat(result.email()).isEqualTo("jane.doe@example.com");
         assertThat(result.location()).isEqualTo("Austin, TX");
+        assertThat(result.professionalSummary())
+                .isEqualTo("Senior Engineer with experience leading backend platform teams and building distributed systems.");
         assertThat(result.rawSkillMentions()).containsExactly("Java", "Spring Boot", "AWS");
         assertThat(result.experiences()).hasSize(2);
 
@@ -66,21 +73,23 @@ class ProfileExtractionServiceTest {
                 FULL_NAME: NONE
                 EMAIL: NONE
                 LOCATION: NONE
+                SUMMARY: NONE
                 SKILLS: NONE""";
         when(groqChatClient.complete(any(), any())).thenReturn(completion);
 
-        var result = new ProfileExtractionService(groqChatClient).extractFromResume("blank resume");
+        var result = new ProfileExtractionService(groqChatClient, emailExtractionService).extractFromResume("blank resume");
 
         assertThat(result.fullName()).isNull();
         assertThat(result.email()).isNull();
         assertThat(result.location()).isNull();
+        assertThat(result.professionalSummary()).isNull();
         assertThat(result.rawSkillMentions()).isEmpty();
         assertThat(result.experiences()).isEmpty();
     }
 
     @Test
     void blankInputShortCircuitsWithoutCallingGroq() {
-        var result = new ProfileExtractionService(groqChatClient).extractFromResume("  ");
+        var result = new ProfileExtractionService(groqChatClient, emailExtractionService).extractFromResume("  ");
 
         assertThat(result.fullName()).isNull();
         assertThat(result.experiences()).isEmpty();
@@ -90,7 +99,7 @@ class ProfileExtractionServiceTest {
     void groqFailureReturnsEmptyDraftInsteadOfPropagating() {
         when(groqChatClient.complete(any(), any())).thenThrow(new IllegalStateException("Groq unavailable"));
 
-        var result = new ProfileExtractionService(groqChatClient).extractFromResume("some resume text");
+        var result = new ProfileExtractionService(groqChatClient, emailExtractionService).extractFromResume("some resume text");
 
         assertThat(result.fullName()).isNull();
         assertThat(result.rawSkillMentions()).isEmpty();

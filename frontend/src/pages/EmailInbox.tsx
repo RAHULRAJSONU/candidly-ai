@@ -8,6 +8,7 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Tabs } from '../components/ui/Tabs'
+import { ErrorBanner, describeError } from '../components/ui/ErrorBanner'
 import { formatRelativeTime } from '../lib/format'
 
 const TYPE_TONE: Record<string, 'blue' | 'green' | 'red' | 'slate'> = {
@@ -15,6 +16,16 @@ const TYPE_TONE: Record<string, 'blue' | 'green' | 'red' | 'slate'> = {
   FOLLOW_UP: 'green',
   REJECTION: 'red',
   OTHER: 'slate',
+}
+
+/** No real priority field exists on EmailIntakeRecord - this is a client-side display
+ * heuristic derived from emailType, matching the mock's priority-pill treatment without
+ * inventing new backend state. */
+const TYPE_PRIORITY: Record<string, { label: string; tone: 'red' | 'amber' | 'slate' }> = {
+  INTERVIEW_INVITATION: { label: 'High priority', tone: 'red' },
+  FOLLOW_UP: { label: 'Medium priority', tone: 'amber' },
+  REJECTION: { label: 'Low priority', tone: 'slate' },
+  OTHER: { label: 'Low priority', tone: 'slate' },
 }
 
 export function EmailInbox() {
@@ -25,11 +36,16 @@ export function EmailInbox() {
   const [emailText, setEmailText] = useState('')
   const [result, setResult] = useState<EmailIntakeResult | null>(null)
   const [classifying, setClassifying] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = () => {
     if (!selected) return
-    api.emailIntake.history(selected.id).then(setHistory)
-    api.emailIntake.needsReview(selected.id).then((r) => setNeedsReviewCount(r.length))
+    setLoadError(null)
+    api.emailIntake.history(selected.id).then(setHistory).catch((e) => setLoadError(describeError(e)))
+    api.emailIntake
+      .needsReview(selected.id)
+      .then((r) => setNeedsReviewCount(r.length))
+      .catch((e) => setLoadError(describeError(e)))
   }
 
   useEffect(load, [selected])
@@ -58,6 +74,7 @@ export function EmailInbox() {
 
   return (
     <div className="space-y-6">
+      {loadError && <ErrorBanner message={`Couldn't load email inbox: ${loadError}`} />}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -134,6 +151,7 @@ export function EmailInbox() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Badge tone={TYPE_TONE[r.emailType]}>{r.emailType.replace(/_/g, ' ')}</Badge>
+                      <Badge tone={TYPE_PRIORITY[r.emailType].tone}>{TYPE_PRIORITY[r.emailType].label}</Badge>
                       {r.jobPosting && (
                         <span className="text-slate-700">
                           {r.jobPosting.company} &middot; {r.jobPosting.title}

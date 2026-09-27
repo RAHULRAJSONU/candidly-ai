@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatusCode;
 import ai.candidly.career.audit.AuditEvent;
 import ai.candidly.career.audit.AuditEventRepository;
 import ai.candidly.career.audit.AuditLedgerService;
+import ai.candidly.career.audit.PipelineActivityService;
 import ai.candidly.career.demographics.BiasAuditReportService;
 
 /**
@@ -32,12 +33,23 @@ public class AuditController {
     private final AuditEventRepository repository;
     private final AuditLedgerService ledgerService;
     private final BiasAuditReportService biasAuditReportService;
+    private final PipelineActivityService pipelineActivityService;
 
     public AuditController(AuditEventRepository repository, AuditLedgerService ledgerService,
-            BiasAuditReportService biasAuditReportService) {
+            BiasAuditReportService biasAuditReportService, PipelineActivityService pipelineActivityService) {
         this.repository = repository;
         this.ledgerService = ledgerService;
         this.biasAuditReportService = biasAuditReportService;
+        this.pipelineActivityService = pipelineActivityService;
+    }
+
+    /** Live feed for the animated pipeline view - most recent discovery/screening/
+     * extraction/embedding/scoring/tailoring/review events across every candidate and
+     * posting, newest first. Frontend polls this every few seconds (no WebSocket/SSE). */
+    @GetMapping("/pipeline-feed")
+    public List<PipelineActivityService.PipelineActivityItem> pipelineFeed(
+            @RequestParam(defaultValue = "50") int limit) {
+        return pipelineActivityService.liveFeed(limit);
     }
 
     /** NYC Local Law 144 annual independent bias audit data (docs/02 §4.3, docs/03 fairness metrics). */

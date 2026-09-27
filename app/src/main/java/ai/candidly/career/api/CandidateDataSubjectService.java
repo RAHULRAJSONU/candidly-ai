@@ -34,9 +34,19 @@ import ai.candidly.career.vault.Certification;
 import ai.candidly.career.vault.CertificationRepository;
 import ai.candidly.career.vault.Education;
 import ai.candidly.career.vault.EducationRepository;
+import ai.candidly.career.vault.Project;
+import ai.candidly.career.vault.ProjectRepository;
+import ai.candidly.career.vault.CandidateSkillProfile;
+import ai.candidly.career.vault.CandidateSkillProfileRepository;
 import ai.candidly.career.autopilot.AutopilotSettingsRepository;
 import ai.candidly.career.emailintake.EmailIntakeRecord;
 import ai.candidly.career.emailintake.EmailIntakeRecordRepository;
+import ai.candidly.career.domain.CandidatePhotoRepository;
+import ai.candidly.career.domain.CandidateResumeRepository;
+import ai.candidly.career.profile.PhotoMeta;
+import ai.candidly.career.profile.ResumeMeta;
+import ai.candidly.career.settings.CandidateSettings;
+import ai.candidly.career.settings.CandidateSettingsRepository;
 
 /**
  * Candidate data-subject rights (docs/02 §4.1 GDPR/UK GDPR): export (portability) and
@@ -49,9 +59,14 @@ import ai.candidly.career.emailintake.EmailIntakeRecordRepository;
  * {@code demographics.CandidateDemographics}'s javadoc), and the Career Vault/pipeline
  * tables added later ({@code achievement}, {@code education}, {@code certification},
  * {@code interview}, {@code job_offer}, {@code manual_application}, {@code
- * email_intake_record}, {@code autopilot_settings}) - anything with a {@code
- * candidate_id} FK gets the same treatment, on the same principle, not just the tables
- * that existed when this service was first written.
+ * email_intake_record}, {@code autopilot_settings}, {@code candidate_settings}, {@code
+ * candidate_resume}, {@code candidate_photo}, {@code candidate_skill_profile}) - anything with a {@code candidate_id} FK gets the same treatment, on
+ * the same principle, not just the tables that existed when this service was first
+ * written. {@code candidate_resume}/{@code candidate_photo}'s bytes are deliberately left
+ * out of the export payload (metadata only, via {@code ResumeMeta}/{@code PhotoMeta}) to
+ * avoid a multi-megabyte base64 blob in an ordinary JSON export - the candidate can
+ * already fetch the raw file from {@code GET .../resume} or {@code GET .../photo} - but
+ * both are still hard-deleted on erasure like everything else here.
  *
  * <p>Erasure deliberately does NOT touch {@code audit_event} rows where {@code subjectId}
  * is this candidate's ID. Docs/02 asks for two things that are in direct tension for a
@@ -86,11 +101,16 @@ public class CandidateDataSubjectService {
     private final AchievementRepository achievementRepository;
     private final EducationRepository educationRepository;
     private final CertificationRepository certificationRepository;
+    private final ProjectRepository projectRepository;
+    private final CandidateSkillProfileRepository skillProfileRepository;
     private final InterviewRepository interviewRepository;
     private final OfferRepository offerRepository;
     private final ManualApplicationRepository manualApplicationRepository;
     private final EmailIntakeRecordRepository emailIntakeRecordRepository;
     private final AutopilotSettingsRepository autopilotSettingsRepository;
+    private final CandidateResumeRepository candidateResumeRepository;
+    private final CandidatePhotoRepository candidatePhotoRepository;
+    private final CandidateSettingsRepository candidateSettingsRepository;
     private final AuditEventRepository auditEventRepository;
     private final AuditLedgerService auditLedgerService;
 
@@ -103,11 +123,16 @@ public class CandidateDataSubjectService {
             AchievementRepository achievementRepository,
             EducationRepository educationRepository,
             CertificationRepository certificationRepository,
+            ProjectRepository projectRepository,
+            CandidateSkillProfileRepository skillProfileRepository,
             InterviewRepository interviewRepository,
             OfferRepository offerRepository,
             ManualApplicationRepository manualApplicationRepository,
             EmailIntakeRecordRepository emailIntakeRecordRepository,
             AutopilotSettingsRepository autopilotSettingsRepository,
+            CandidateResumeRepository candidateResumeRepository,
+            CandidatePhotoRepository candidatePhotoRepository,
+            CandidateSettingsRepository candidateSettingsRepository,
             AuditEventRepository auditEventRepository,
             AuditLedgerService auditLedgerService) {
         this.candidateRepository = candidateRepository;
@@ -119,11 +144,16 @@ public class CandidateDataSubjectService {
         this.achievementRepository = achievementRepository;
         this.educationRepository = educationRepository;
         this.certificationRepository = certificationRepository;
+        this.projectRepository = projectRepository;
+        this.skillProfileRepository = skillProfileRepository;
         this.interviewRepository = interviewRepository;
         this.offerRepository = offerRepository;
         this.manualApplicationRepository = manualApplicationRepository;
         this.emailIntakeRecordRepository = emailIntakeRecordRepository;
         this.autopilotSettingsRepository = autopilotSettingsRepository;
+        this.candidateResumeRepository = candidateResumeRepository;
+        this.candidatePhotoRepository = candidatePhotoRepository;
+        this.candidateSettingsRepository = candidateSettingsRepository;
         this.auditEventRepository = auditEventRepository;
         this.auditLedgerService = auditLedgerService;
     }
@@ -142,11 +172,20 @@ public class CandidateDataSubjectService {
                 achievementRepository.findByCandidateId(candidateId),
                 educationRepository.findByCandidateId(candidateId),
                 certificationRepository.findByCandidateId(candidateId),
+                projectRepository.findByCandidateId(candidateId),
+                skillProfileRepository.findByCandidateId(candidateId),
                 interviewRepository.findByCandidateId(candidateId),
                 offerRepository.findByCandidateId(candidateId),
                 manualApplicationRepository.findByCandidateIdOrderByCreatedAtDesc(candidateId),
                 emailIntakeRecordRepository.findByCandidateIdOrderByClassifiedAtDesc(candidateId),
                 autopilotSettingsRepository.findByCandidateId(candidateId).orElse(null),
+                candidateSettingsRepository.findByCandidateId(candidateId).orElse(null),
+                candidateResumeRepository.findByCandidateId(candidateId)
+                        .map(r -> new ResumeMeta(r.getFilename(), r.getContentType(), r.getSizeBytes(), r.getUploadedAt()))
+                        .orElse(null),
+                candidatePhotoRepository.findByCandidateId(candidateId)
+                        .map(p -> new PhotoMeta(p.getContentType(), p.getSizeBytes(), p.getUploadedAt()))
+                        .orElse(null),
                 auditEventRepository.findBySubjectIdOrderByOccurredAtAsc(candidateId));
     }
 
@@ -186,6 +225,13 @@ public class CandidateDataSubjectService {
         certificationRepository.deleteAll(certifications);
         certificationRepository.flush();
 
+        List<Project> projects = projectRepository.findByCandidateId(candidateId);
+        projectRepository.deleteAll(projects);
+        projectRepository.flush();
+
+        skillProfileRepository.deleteByCandidateId(candidateId);
+        skillProfileRepository.flush();
+
         List<Interview> interviews = interviewRepository.findByCandidateId(candidateId);
         interviewRepository.deleteAll(interviews);
         interviewRepository.flush();
@@ -205,16 +251,25 @@ public class CandidateDataSubjectService {
         autopilotSettingsRepository.findByCandidateId(candidateId).ifPresent(autopilotSettingsRepository::delete);
         autopilotSettingsRepository.flush();
 
+        candidateSettingsRepository.findByCandidateId(candidateId).ifPresent(candidateSettingsRepository::delete);
+        candidateSettingsRepository.flush();
+
+        candidateResumeRepository.deleteByCandidateId(candidateId);
+        candidateResumeRepository.flush();
+
+        candidatePhotoRepository.deleteByCandidateId(candidateId);
+        candidatePhotoRepository.flush();
+
         candidateRepository.delete(candidate);
         candidateRepository.flush();
 
         auditLedgerService.record(AuditEventType.CANDIDATE_DATA_ERASED, candidateId,
                 ("erasure request: deleted %d tailoring job(s), %d tailored artifact(s), %d match scorecard(s), "
                         + "%d experience record(s), %d achievement(s), %d education record(s), %d certification(s), "
-                        + "%d interview(s), %d offer(s), %d manual application(s), %d email intake record(s)")
+                        + "%d project(s), %d interview(s), %d offer(s), %d manual application(s), %d email intake record(s)")
                         .formatted(jobs.size(), artifacts.size(), scorecards.size(), experiences.size(),
-                                achievements.size(), education.size(), certifications.size(), interviews.size(),
-                                offers.size(), manualApplications.size(), emailIntakeRecords.size()));
+                                achievements.size(), education.size(), certifications.size(), projects.size(),
+                                interviews.size(), offers.size(), manualApplications.size(), emailIntakeRecords.size()));
     }
 
     public record CandidateDataExport(
@@ -226,11 +281,16 @@ public class CandidateDataSubjectService {
             List<Achievement> achievements,
             List<Education> education,
             List<Certification> certifications,
+            List<Project> projects,
+            List<CandidateSkillProfile> skillProfiles,
             List<Interview> interviews,
             List<Offer> offers,
             List<ManualApplication> manualApplications,
             List<EmailIntakeRecord> emailIntakeRecords,
             ai.candidly.career.autopilot.AutopilotSettings autopilotSettings,
+            CandidateSettings settings,
+            ResumeMeta resume,
+            PhotoMeta photo,
             List<AuditEvent> decisionHistory) {
     }
 }

@@ -70,7 +70,7 @@ class BiasAuditReportServiceTest {
 
     private Candidate candidate() {
         Candidate candidate = new Candidate("Test Candidate", UUID.randomUUID() + "@example.com", "Remote",
-                Set.of("US"), 0, Set.of());
+                Set.of("US"), 0, Set.of(), Set.of());
         setField(candidate, "id", UUID.randomUUID());
         return candidate;
     }

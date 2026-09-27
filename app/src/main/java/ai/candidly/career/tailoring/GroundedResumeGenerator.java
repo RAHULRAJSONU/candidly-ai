@@ -42,7 +42,19 @@ public class GroundedResumeGenerator {
     }
 
     public List<String> generateBullets(List<CandidateExperience> experiences, JobPosting job, String priorFeedback) {
+        return generateBullets(experiences, job, priorFeedback, "BALANCED", "STANDARD");
+    }
+
+    /**
+     * @param responseStyle one of CONCISE/BALANCED/DETAILED (Settings &gt; AI Preferences'
+     * "Response Style") - controls sentence length/tone, not factual content.
+     * @param levelOfDetail one of BRIEF/STANDARD/COMPREHENSIVE ("Level of Detail") -
+     * controls how many verified items get a bullet, not which facts are usable.
+     */
+    public List<String> generateBullets(List<CandidateExperience> experiences, JobPosting job, String priorFeedback,
+            String responseStyle, String levelOfDetail) {
         StringBuilder prompt = new StringBuilder();
+        prompt.append(styleInstruction(responseStyle, levelOfDetail));
         prompt.append("<verified_experience>\n");
         for (CandidateExperience exp : experiences) {
             prompt.append("- employer: ").append(exp.getEmployer())
@@ -89,7 +101,13 @@ public class GroundedResumeGenerator {
             """;
 
     public String generateCoverLetter(List<CandidateExperience> experiences, JobPosting job) {
+        return generateCoverLetter(experiences, job, "BALANCED", "STANDARD");
+    }
+
+    public String generateCoverLetter(List<CandidateExperience> experiences, JobPosting job, String responseStyle,
+            String levelOfDetail) {
         StringBuilder prompt = new StringBuilder();
+        prompt.append(styleInstruction(responseStyle, levelOfDetail));
         prompt.append("<verified_experience>\n");
         for (CandidateExperience exp : experiences) {
             prompt.append("- employer: ").append(exp.getEmployer())
@@ -154,5 +172,23 @@ public class GroundedResumeGenerator {
                 .map(line -> line.strip().replaceFirst("^\\d+\\.\\s*", ""))
                 .filter(line -> !line.isBlank())
                 .toList();
+    }
+
+    /** Turns the Settings page's "Response Style"/"Level of Detail" preferences into an
+     * instruction block prepended to the generation prompt. Style/length only - the
+     * grounding rules above still bind, and {@link DeterministicGroundingVerifier} still
+     * rejects anything not traceable to {@code <verified_experience>} regardless of style. */
+    private String styleInstruction(String responseStyle, String levelOfDetail) {
+        String style = switch (responseStyle == null ? "BALANCED" : responseStyle) {
+            case "CONCISE" -> "Keep each bullet/sentence short and punchy - one clause where possible.";
+            case "DETAILED" -> "Write fuller bullets/sentences that spell out context and impact, not just the headline fact.";
+            default -> "Use a balanced, professional tone - neither terse nor verbose.";
+        };
+        String detail = switch (levelOfDetail == null ? "STANDARD" : levelOfDetail) {
+            case "BRIEF" -> "Cover only the strongest 2-3 verified items - omit weaker or redundant ones.";
+            case "COMPREHENSIVE" -> "Cover every verified item that is genuinely relevant, not just the top few.";
+            default -> "Cover the verified items that are clearly relevant to the target role.";
+        };
+        return "<style_preference>" + style + " " + detail + "</style_preference>\n";
     }
 }

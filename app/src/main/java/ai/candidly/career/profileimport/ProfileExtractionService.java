@@ -53,6 +53,12 @@ public class ProfileExtractionService {
 
             FULL_NAME: <full name, or NONE if not found>
             LOCATION: <city/region, or NONE if not found>
+            SUMMARY: <a 2-3 sentence professional summary, written ONLY from facts explicitly \
+            stated in the source text (role, years of experience, domains, technologies actually \
+            mentioned) - never invent, embellish, or infer anything not present in the text. \
+            Output NONE if the text does not contain enough information for a truthful summary, \
+            or if it already contains its own summary/objective section (repeat that one verbatim \
+            instead of writing a new one).>
             SKILLS: <comma-separated list of skills/technologies mentioned>
             EXPERIENCE_START
             EMPLOYER: <company name>
@@ -85,28 +91,29 @@ public class ProfileExtractionService {
 
     private ProfileImportResult extract(String sourceText, String userPromptPrefix) {
         if (sourceText == null || sourceText.isBlank()) {
-            return new ProfileImportResult(null, null, null, Set.of(), List.of());
+            return new ProfileImportResult(null, null, null, null, Set.of(), List.of());
         }
         String email = emailExtractionService.extractOwnEmail(sourceText).orElse(null);
         try {
             String completion = groqChatClient.complete(SYSTEM_PROMPT, userPromptPrefix + "\n\n" + sourceText);
             ProfileImportResult parsed = parse(completion);
-            return new ProfileImportResult(parsed.fullName(), email, parsed.location(), parsed.rawSkillMentions(),
-                    parsed.experiences());
+            return new ProfileImportResult(parsed.fullName(), email, parsed.location(), parsed.professionalSummary(),
+                    parsed.rawSkillMentions(), parsed.experiences());
         } catch (RuntimeException e) {
             log.warn("Profile extraction failed - returning an empty draft for the candidate to fill in manually", e);
-            return new ProfileImportResult(null, email, null, Set.of(), List.of());
+            return new ProfileImportResult(null, email, null, null, Set.of(), List.of());
         }
     }
 
     private ProfileImportResult parse(String completion) {
         if (completion == null) {
-            return new ProfileImportResult(null, null, null, Set.of(), List.of());
+            return new ProfileImportResult(null, null, null, null, Set.of(), List.of());
         }
         String[] lines = completion.split("\\R");
 
         String fullName = null;
         String location = null;
+        String summary = null;
         Set<String> skills = new LinkedHashSet<>();
         List<ProfileImportResult.ExperienceDraft> experiences = new ArrayList<>();
 
@@ -146,13 +153,14 @@ public class ProfileExtractionService {
                 switch (key) {
                     case "FULL_NAME" -> fullName = value;
                     case "LOCATION" -> location = value;
+                    case "SUMMARY" -> summary = value;
                     case "SKILLS" -> skills.addAll(splitSkills(matcher.group(2)));
                     default -> { }
                 }
             }
         }
 
-        return new ProfileImportResult(fullName, null, location, skills, experiences);
+        return new ProfileImportResult(fullName, null, location, summary, skills, experiences);
     }
 
     private Set<String> splitSkills(String raw) {

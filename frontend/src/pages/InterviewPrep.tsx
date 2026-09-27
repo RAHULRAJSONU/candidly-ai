@@ -9,6 +9,7 @@ import { ProgressBar, StatCard } from '../components/ui/StatCard'
 import { ScoreRing } from '../components/ui/ScoreRing'
 import { Button } from '../components/ui/Button'
 import { Tabs } from '../components/ui/Tabs'
+import { ErrorBanner, describeError } from '../components/ui/ErrorBanner'
 
 const CATEGORIES: { key: InterviewCategory; label: string }[] = [
   { key: 'SYSTEM_DESIGN', label: 'System Design' },
@@ -57,6 +58,7 @@ export function InterviewPrep() {
   // per-category indicators below, derived from answers actually submitted this session.
   const [sessionHistory, setSessionHistory] = useState<{ category: InterviewCategory; feedback: AnswerFeedback }[]>([])
 
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [voiceMode, setVoiceMode] = useState(false)
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<any>(null)
@@ -64,24 +66,33 @@ export function InterviewPrep() {
     typeof window !== 'undefined' && 'speechSynthesis' in window && getSpeechRecognitionCtor() != null
 
   useEffect(() => {
-    api.interviewPrep.questions({ category }).then((qs) => {
-      setQuestions(qs)
-      setSelectedQuestion(qs[0] ?? null)
-      setFeedback(null)
-      setAnswer('')
-    })
+    api.interviewPrep
+      .questions({ category })
+      .then((qs) => {
+        setQuestions(qs)
+        setSelectedQuestion(qs[0] ?? null)
+        setFeedback(null)
+        setAnswer('')
+      })
+      .catch((e) => setLoadError(describeError(e)))
   }, [category])
 
   useEffect(() => {
-    api.jobPostings.list().then((jobs) => {
-      setJobPostings(jobs)
-      if (jobs.length > 0) setJobPostingId(jobs[0].id)
-    })
+    api.jobPostings
+      .list()
+      .then((jobs) => {
+        setJobPostings(jobs)
+        if (jobs.length > 0) setJobPostingId(jobs[0].id)
+      })
+      .catch((e) => setLoadError(describeError(e)))
   }, [])
 
   useEffect(() => {
     if (!candidate) return
-    api.interviewPrep.suggestedLevel(candidate.id).then((res) => setCareerLevel(res.level))
+    api.interviewPrep
+      .suggestedLevel(candidate.id)
+      .then((res) => setCareerLevel(res.level))
+      .catch((e) => setLoadError(describeError(e)))
   }, [candidate])
 
   // Auto-speak the active question in voice mode - the "feels like a real interviewer" part.
@@ -188,6 +199,7 @@ export function InterviewPrep() {
 
   return (
     <div className="space-y-6">
+      {loadError && <ErrorBanner message={`Couldn't load interview prep data: ${loadError}`} />}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Interview Prep</h1>
         <p className="mt-1 text-sm text-slate-500">

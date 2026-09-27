@@ -1,10 +1,3 @@
-export function formatCompRange(minMinorUnits: number | null, maxMinorUnits: number | null): string {
-  if (minMinorUnits == null && maxMinorUnits == null) return 'Not specified'
-  const fmt = (v: number) => `$${Math.round(v / 100_000)}k`
-  if (minMinorUnits != null && maxMinorUnits != null) return `${fmt(minMinorUnits)} - ${fmt(maxMinorUnits)}`
-  return fmt((minMinorUnits ?? maxMinorUnits)!)
-}
-
 export function formatRelativeTime(iso: string): string {
   const date = new Date(iso)
   const diffMs = Date.now() - date.getTime()

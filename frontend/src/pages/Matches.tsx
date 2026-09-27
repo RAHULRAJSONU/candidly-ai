@@ -10,7 +10,8 @@ import { CompanyAvatar } from '../components/ui/CompanyAvatar'
 import { ScoreRing } from '../components/ui/ScoreRing'
 import { StatCard } from '../components/ui/StatCard'
 import { Tabs } from '../components/ui/Tabs'
-import { formatCompRange } from '../lib/format'
+import { ErrorBanner, describeError } from '../components/ui/ErrorBanner'
+import { formatCompRange } from '../lib/currency'
 
 // The backend has no "watchlist"/"hidden" concept - these tiers are derived client-side
 // from compositeScore to approximate the mock's 5-way tab split without new persistence.
@@ -30,13 +31,16 @@ export function Matches() {
   const [tab, setTab] = useState<Tier>('all')
   const [sortBy, setSortBy] = useState<SortBy>('score')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!selected) return
     setLoading(true)
+    setError(null)
     api.matches
       .listForCandidate(selected.id)
       .then((m) => setMatches(m))
+      .catch((e) => setError(describeError(e)))
       .finally(() => setLoading(false))
   }, [selected])
 
@@ -59,6 +63,7 @@ export function Matches() {
 
   return (
     <div className="space-y-6">
+      {error && <ErrorBanner message={`Couldn't load matches: ${error}`} />}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Match Explorer</h1>
@@ -119,7 +124,7 @@ export function Matches() {
               </div>
               <div className="hidden gap-2 sm:flex">
                 <Badge tone="slate">{m.jobPosting.remote ? 'Remote' : m.jobPosting.location}</Badge>
-                <Badge tone="slate">{formatCompRange(m.jobPosting.compMinMinorUnits, m.jobPosting.compMaxMinorUnits)}</Badge>
+                <Badge tone="slate">{formatCompRange(m.jobPosting.compMinMinorUnits, m.jobPosting.compMaxMinorUnits, m.jobPosting.currency)}</Badge>
               </div>
               <Badge tone={toneForScore(m.compositeScore)}>{labelForScore(m.compositeScore)}</Badge>
               {m.shortlisted && <Badge tone="green">Shortlisted</Badge>}

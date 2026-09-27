@@ -36,11 +36,10 @@ public class TailoringAsyncExecutor {
 
     @Async("tailoringTaskExecutor")
     public void run(java.util.UUID tailoringJobId) {
-        TailoringJob job = tailoringJobRepository.findById(tailoringJobId)
-                .orElseThrow(() -> new IllegalStateException("TailoringJob vanished: " + tailoringJobId));
-
-        statusService.markRunning(job);
         try {
+            TailoringJob job = tailoringJobRepository.findById(tailoringJobId)
+                    .orElseThrow(() -> new IllegalStateException("TailoringJob vanished: " + tailoringJobId));
+            statusService.markRunning(job);
             TailoredArtifact artifact = resumeTailoringService.tailor(job.getCandidate(), job.getJobPosting());
             statusService.markCompleted(tailoringJobId, artifact);
         } catch (Exception e) {

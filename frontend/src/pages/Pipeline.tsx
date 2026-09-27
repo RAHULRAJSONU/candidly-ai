@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Mail } from 'lucide-react'
+import { AlertTriangle, Mail } from 'lucide-react'
 import { api } from '../api/client'
 import type { EmailIntakeResult, PipelineInterview, PipelineOffer, PipelineSummary } from '../api/types'
 import { useCandidate } from '../context/CandidateContext'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
+import { ErrorBanner, describeError } from '../components/ui/ErrorBanner'
 import { formatRelativeTime } from '../lib/format'
 
 const FUNNEL_STAGES: { key: keyof PipelineSummary; label: string; tone: string }[] = [
+  { key: 'discovered', label: 'Discovered', tone: 'bg-slate-100 text-slate-700' },
+  { key: 'filtered', label: 'Filtered', tone: 'bg-sky-50 text-sky-700' },
   { key: 'matched', label: 'Matched', tone: 'bg-blue-50 text-blue-700' },
   { key: 'shortlisted', label: 'Shortlisted', tone: 'bg-indigo-50 text-indigo-700' },
   { key: 'tailoring', label: 'Tailoring', tone: 'bg-violet-50 text-violet-700' },
   { key: 'pendingApproval', label: 'Pending Approval', tone: 'bg-amber-50 text-amber-700' },
   { key: 'approved', label: 'Approved', tone: 'bg-cyan-50 text-cyan-700' },
+  { key: 'rejected', label: 'Not Selected', tone: 'bg-red-50 text-red-700' },
   { key: 'interviews', label: 'Interviews', tone: 'bg-teal-50 text-teal-700' },
   { key: 'offers', label: 'Offers', tone: 'bg-emerald-50 text-emerald-700' },
 ]
@@ -26,12 +30,14 @@ export function Pipeline() {
   const [emailText, setEmailText] = useState('')
   const [emailResult, setEmailResult] = useState<EmailIntakeResult | null>(null)
   const [classifying, setClassifying] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const load = () => {
     if (!selected) return
-    api.pipeline.summary(selected.id).then(setSummary)
-    api.pipeline.interviews(selected.id).then(setInterviews)
-    api.pipeline.offers(selected.id).then(setOffers)
+    setError(null)
+    api.pipeline.summary(selected.id).then(setSummary).catch((e) => setError(describeError(e)))
+    api.pipeline.interviews(selected.id).then(setInterviews).catch((e) => setError(describeError(e)))
+    api.pipeline.offers(selected.id).then(setOffers).catch((e) => setError(describeError(e)))
   }
 
   useEffect(load, [selected])
@@ -62,6 +68,7 @@ export function Pipeline() {
 
   return (
     <div className="space-y-6">
+      {error && <ErrorBanner message={`Couldn't load pipeline data: ${error}`} />}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Pipeline</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -106,6 +113,16 @@ export function Pipeline() {
 
         {emailResult && (
           <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm">
+            {emailResult.scamRisk && (
+              <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-red-800">
+                <AlertTriangle className="mt-0.5 shrink-0" size={16} />
+                <p>
+                  This email matches patterns common in job scams or phishing (requests for payment/banking/ID
+                  details, unsolicited too-good offers, or pressure to move off-platform). Verify the sender and
+                  company independently before responding.
+                </p>
+              </div>
+            )}
             <p>
               Classified as <Badge tone="blue">{emailResult.emailType}</Badge>
             </p>

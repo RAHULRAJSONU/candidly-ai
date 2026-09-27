@@ -30,9 +30,9 @@ class CrossEncoderRerankServiceTest {
 
     @Test
     void reordersCandidatesByDescendingRelevanceProbability() {
-        Candidate candidate = new Candidate("Ada", "ada@example.com", "Remote", Set.of("US"), 0, Set.of());
+        Candidate candidate = new Candidate("Ada", "ada@example.com", "Remote", Set.of("US"), 0, Set.of(), Set.of());
         CandidateExperience experience = new CandidateExperience(candidate, "Acme", "Engineer",
-                LocalDate.of(2020, 1, 1), null, "Built backend systems", Set.of(), Set.of());
+                LocalDate.of(2020, 1, 1), null, "Built backend systems", Set.of(), Set.of(), Set.of());
 
         JobPosting weakFit = job("weak-fit");
         JobPosting strongFit = job("strong-fit");

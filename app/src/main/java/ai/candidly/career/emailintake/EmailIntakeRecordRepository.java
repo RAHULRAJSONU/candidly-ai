@@ -10,4 +10,7 @@ public interface EmailIntakeRecordRepository extends JpaRepository<EmailIntakeRe
     List<EmailIntakeRecord> findByCandidateIdOrderByClassifiedAtDesc(UUID candidateId);
 
     List<EmailIntakeRecord> findByCandidateIdAndReviewStatusOrderByClassifiedAtDesc(UUID candidateId, EmailReviewStatus status);
+
+    /** Every classified email tied to the same job posting - backs the mock's "Previous Emails" thread panel. */
+    List<EmailIntakeRecord> findByCandidateIdAndJobPostingIdOrderByClassifiedAtDesc(UUID candidateId, UUID jobPostingId);
 }

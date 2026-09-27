@@ -14,26 +14,34 @@ import java.util.UUID;
  */
 public final class ReciprocalRankFusion {
 
-    private static final int K = 60;
+    private static final int DEFAULT_K = 60;
 
     private ReciprocalRankFusion() {
     }
 
-    /** Fused ranking, best first. Items appearing in only one input ranking are still included. */
+    /** Fused ranking, best first, using the standard k=60. Items appearing in only one
+     * input ranking are still included. */
     public static List<UUID> fuse(List<UUID> lexicalRanking, List<UUID> denseRanking) {
+        return fuse(List.of(lexicalRanking, denseRanking), DEFAULT_K);
+    }
+
+    /** Same fusion over any number of rankings (e.g. lexical + dense + a preference-based
+     * list), with k as a tuning knob - see {@code candidly.retrieval.rrf-k}. */
+    public static List<UUID> fuse(List<List<UUID>> rankings, int k) {
         Map<UUID, Double> scores = new LinkedHashMap<>();
-        accumulate(scores, lexicalRanking);
-        accumulate(scores, denseRanking);
+        for (List<UUID> ranking : rankings) {
+            accumulate(scores, ranking, k);
+        }
         return scores.entrySet().stream()
                 .sorted(Map.Entry.<UUID, Double>comparingByValue().reversed())
                 .map(Map.Entry::getKey)
                 .toList();
     }
 
-    private static void accumulate(Map<UUID, Double> scores, List<UUID> ranking) {
+    private static void accumulate(Map<UUID, Double> scores, List<UUID> ranking, int k) {
         for (int i = 0; i < ranking.size(); i++) {
             int rank1Based = i + 1;
-            scores.merge(ranking.get(i), 1.0 / (K + rank1Based), Double::sum);
+            scores.merge(ranking.get(i), 1.0 / (k + rank1Based), Double::sum);
         }
     }
 }

@@ -10,6 +10,7 @@ import { CompanyAvatar } from '../components/ui/CompanyAvatar'
 import { Tabs } from '../components/ui/Tabs'
 import { Button } from '../components/ui/Button'
 import { ProgressBar } from '../components/ui/StatCard'
+import { ErrorBanner, describeError } from '../components/ui/ErrorBanner'
 import { formatRelativeTime } from '../lib/format'
 
 const MANUAL_STATUS_TONE: Record<ManualApplicationStatus, 'blue' | 'green' | 'red' | 'slate' | 'amber'> = {
@@ -28,6 +29,7 @@ export function Applications() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [atsScore, setAtsScore] = useState<AtsScoreResult | null>(null)
   const [docTab, setDocTab] = useState('resume')
 
@@ -43,12 +45,14 @@ export function Applications() {
 
   const loadManual = () => {
     if (!candidate) return
-    api.pipeline.manualApplications(candidate.id).then(setManual)
+    api.pipeline.manualApplications(candidate.id).then(setManual).catch((e) => setError(describeError(e)))
   }
 
   useEffect(() => {
     setLoading(true)
-    load().finally(() => setLoading(false))
+    load()
+      .catch((e) => setError(describeError(e)))
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(loadManual, [candidate])
@@ -79,6 +83,7 @@ export function Applications() {
 
   return (
     <div className="space-y-6">
+      {error && <ErrorBanner message={`Couldn't load applications: ${error}`} />}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Applications</h1>
         <p className="mt-1 text-sm text-slate-500">

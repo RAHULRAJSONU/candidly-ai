@@ -47,7 +47,9 @@ import { Badge, labelForScore, toneForScore } from '../components/ui/Badge'
 import { CompanyAvatar } from '../components/ui/CompanyAvatar'
 import { Button } from '../components/ui/Button'
 import { ScoreRing } from '../components/ui/ScoreRing'
-import { formatCompRange, formatRelativeTime } from '../lib/format'
+import { ErrorBanner, describeError } from '../components/ui/ErrorBanner'
+import { formatRelativeTime } from '../lib/format'
+import { formatCompRange } from '../lib/currency'
 
 const EVENT_LABEL: Record<string, string> = {
   JOB_POSTING_SCREENED: 'Job posting screened',
@@ -119,10 +121,12 @@ export function Dashboard() {
   const [vault, setVault] = useState<CareerVaultView | null>(null)
   const [tailoringJobs, setTailoringJobs] = useState<TailoringJob[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!selected) return
     setLoading(true)
+    setError(null)
     Promise.all([
       api.jobPostings.list(),
       api.matches.listForCandidate(selected.id),
@@ -141,6 +145,7 @@ export function Dashboard() {
         setVault(vaultView)
         setTailoringJobs(jobsForCandidate)
       })
+      .catch((e) => setError(describeError(e)))
       .finally(() => setLoading(false))
   }, [selected])
 
@@ -221,6 +226,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {error && <ErrorBanner message={`Couldn't load dashboard data: ${error}`} />}
       <div
         className="relative overflow-hidden rounded-2xl p-8 text-white"
         style={{
@@ -252,7 +258,7 @@ export function Dashboard() {
               </div>
               <ul className="mt-2 space-y-1 text-sm text-slate-100">
                 <li>{selected.location || 'Location not set'}</li>
-                <li>${Math.round(selected.compFloorMinorUnits / 100_000)}k+ target comp</li>
+                <li>{formatCompRange(selected.compFloorMinorUnits, null, selected.preferredCurrency)}+ target comp</li>
                 <li>{selected.workAuthorizations.length > 0 ? selected.workAuthorizations.join(', ') : 'Work authorization not set'}</li>
               </ul>
             </div>
@@ -440,7 +446,7 @@ export function Dashboard() {
                     {m.jobPosting.remote ? 'Remote' : m.jobPosting.location}
                   </span>
                   <span className="hidden w-28 text-sm text-slate-500 md:block">
-                    {formatCompRange(m.jobPosting.compMinMinorUnits, m.jobPosting.compMaxMinorUnits)}
+                    {formatCompRange(m.jobPosting.compMinMinorUnits, m.jobPosting.compMaxMinorUnits, m.jobPosting.currency)}
                   </span>
                   <Link to={`/matches/${m.id}`}>
                     <Button variant="secondary">View Details</Button>

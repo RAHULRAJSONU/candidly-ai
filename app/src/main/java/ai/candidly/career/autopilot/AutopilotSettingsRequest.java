@@ -17,6 +17,7 @@ public record AutopilotSettingsRequest(
         Set<String> includeKeywords,
         Set<String> excludeKeywords,
         Set<String> enabledJobSources,
+        Set<String> trackedCompanySlugs,
         Boolean autoApply,
         Boolean aiTailorResume,
         Boolean generateCoverLetter,

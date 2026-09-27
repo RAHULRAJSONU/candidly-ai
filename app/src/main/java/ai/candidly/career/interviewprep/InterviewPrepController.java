@@ -17,6 +17,7 @@ import ai.candidly.career.domain.CandidateExperienceRepository;
 import ai.candidly.career.domain.CandidateRepository;
 import ai.candidly.career.domain.JobPosting;
 import ai.candidly.career.domain.JobPostingRepository;
+import ai.candidly.career.settings.CandidateSettingsService;
 import jakarta.validation.Valid;
 
 /**
@@ -45,12 +46,13 @@ public class InterviewPrepController {
     private final CandidateRepository candidateRepository;
     private final CandidateExperienceRepository candidateExperienceRepository;
     private final JobPostingRepository jobPostingRepository;
+    private final CandidateSettingsService settingsService;
 
     public InterviewPrepController(InterviewQuestionBank questionBank, MockInterviewAnswerJudgeService judgeService,
             PersonalizedQuestionGeneratorService questionGeneratorService,
             FollowUpQuestionGeneratorService followUpQuestionGeneratorService, CareerLevelEstimator careerLevelEstimator,
             CandidateRepository candidateRepository, CandidateExperienceRepository candidateExperienceRepository,
-            JobPostingRepository jobPostingRepository) {
+            JobPostingRepository jobPostingRepository, CandidateSettingsService settingsService) {
         this.questionBank = questionBank;
         this.judgeService = judgeService;
         this.questionGeneratorService = questionGeneratorService;
@@ -59,6 +61,7 @@ public class InterviewPrepController {
         this.candidateRepository = candidateRepository;
         this.candidateExperienceRepository = candidateExperienceRepository;
         this.jobPostingRepository = jobPostingRepository;
+        this.settingsService = settingsService;
     }
 
     @GetMapping("/questions")
@@ -85,6 +88,13 @@ public class InterviewPrepController {
 
     @PostMapping("/answers")
     public MockInterviewAnswerJudgeService.AnswerFeedback submitAnswer(@Valid @RequestBody AnswerRequest request) {
+        if (request.candidateId() != null) {
+            try {
+                settingsService.requireInterviewPrepEnabled(request.candidateId());
+            } catch (CandidateSettingsService.AiFeatureDisabledException e) {
+                throw new ResponseStatusException(HttpStatusCode.valueOf(409), e.getMessage());
+            }
+        }
         String questionText = resolveQuestionText(request);
         JobPosting job = findJobPosting(request.jobPostingId());
         CareerLevel careerLevel = request.careerLevel() == null ? DEFAULT_CAREER_LEVEL : request.careerLevel();

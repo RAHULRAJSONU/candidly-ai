@@ -115,6 +115,15 @@ public class EmailIntakeRecord {
         this.reviewedAt = Instant.now();
     }
 
+    /** The candidate proposes a different time/format instead of sending the draft as-is -
+     * still never sends anything, same as every other terminal status here. */
+    public void suggestAlternative(String alternativeText, String note) {
+        this.finalReplyText = alternativeText;
+        this.reviewStatus = EmailReviewStatus.ALTERNATIVE_SUGGESTED;
+        this.reviewNote = note;
+        this.reviewedAt = Instant.now();
+    }
+
     public void cancel(String note) {
         this.reviewStatus = EmailReviewStatus.CANCELLED;
         this.reviewNote = note;

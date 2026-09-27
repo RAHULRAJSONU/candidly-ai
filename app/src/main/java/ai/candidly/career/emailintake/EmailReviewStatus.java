@@ -13,5 +13,6 @@ public enum EmailReviewStatus {
     APPROVED_SEND,
     EDITED_SEND,
     SCHEDULED,
-    CANCELLED
+    CANCELLED,
+    ALTERNATIVE_SUGGESTED
 }
